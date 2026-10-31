@@ -1,146 +1,220 @@
-# CivicMesh AI — first implementation milestone
+# CivicMesh AI workflow
 
-Work branch: `feat/ai-workflow`. This module implements text extraction and a
-checkpointed clarification/review workflow. It does not implement frontend,
-API routes, database persistence or a job worker.
+Branch: `feat/ai-workflow`. This package implements the AI side of report processing
+and follow-up assessment. Frontend, authentication, storage access, matching retrieval,
+official-source ingestion and worker/job persistence remain backend/frontend responsibilities.
+No automatic complaint submission or incident merge is implemented or exposed as a tool.
 
-## What works
+## Implemented
 
-- Configurable Gemini adapter using `google-genai`; no model identifier default.
-- Pydantic validation of inputs and model responses, bounded text and answer history.
-- Unknown observations stay null. Model outputs cannot contain official status,
-  receipts, authenticated IDs or confirmed coordinates.
-- LangGraph extraction -> missing information -> clarification -> re-extraction.
-- Original report text remains unchanged; answers are stored separately.
-- At most three clarification rounds (four extraction calls including the initial call).
-- Explicit human review before `ready_for_backend`; rejection produces `rejected`.
-- Remaining missing information after the limit produces `needs_information`.
-- Required injected checkpoint saver. No implicit in-memory production fallback.
-- Sanitized provider errors and a CLI for explicitly authorized live text extraction.
-- Backend matching/official-source interfaces, ready for teammate coordination.
+| Capability | Behavior |
+| --- | --- |
+| Text, photos and recorded audio | Gemini structured extraction, Hindi/English instructions, explicit model configuration |
+| Missing information | Unknown fields remain null; category conflicts and absent confirmed locations trigger clarification |
+| Clarification | Original report preserved; at most three answer/re-extraction rounds |
+| Human review | Extraction, complaint draft and follow-up assessment each pause before handoff |
+| Incident candidates | Calls owner-authorized backend matching, validates category/IDs, never merges |
+| Priority | Advisory assessment with exact quotations from approved observations |
+| Authority recommendation | Calls backend source retrieval; rejects invented authorities and source IDs |
+| Complaint packet | Validated draft plus trusted recipient, confirmed location, evidence IDs and source provenance |
+| Follow-up | Four supported outcomes; same-location before/after images required for visual condition claims |
+| Checkpoints | Required injected saver; local SQLite and PostgreSQL adapter contexts provided |
+| Verification | Unit/workflow tests, real SDK serialization over local HTTP doubles, separate-process durable restart test, AI CI |
 
-Approval sends no complaint, merges no incident and changes no authority status.
-Authority status in the result is always `unknown`.
+`authority_status` in report output stays `unknown`; `submitted` stays `false`.
+Follow-up results are attributed to `ai_assessment` and explicitly do not update
+authority status. A citizen or AI observation is not a government response.
 
-## Windows setup
+## Install and test (Windows PowerShell)
 
 From the repository root:
 
 ```powershell
 git branch --show-current
 Set-Location backend/app/ai
-uv sync --frozen --python 3.11
+uv sync --frozen --extra checkpoints --python 3.11
 uv run --frozen ruff check .
 uv run --frozen pytest -q
 uv run --frozen civicmesh-extract --help
 ```
 
-The isolated project installs as `civicmesh_ai`. Its own pyproject and uv.lock
-avoid choosing the backend teammate's dependency structure. At integration,
-the backend can install this local package or coordinate moving its dependencies
-into the backend's shared manifest. Do not independently create conflicting schemas.
+This isolated project installs as `civicmesh_ai`; pyproject.toml and uv.lock pin its
+dependencies without modifying the backend teammate's dependency setup. At integration,
+install this local package in the backend environment or coordinate consolidating manifests.
+The optional `checkpoints` extra installs SQLite and PostgreSQL checkpointer adapters.
 
 ## Live extraction
 
-Set `GEMINI_API_KEY` and `GEMINI_MODEL` in the process environment. Use a model
-available to your project that supports structured output. `.env.example` lists
-the variables; this module does not automatically read `.env` files.
-Keep keys in your local environment or secret manager, never in Git or chat.
+Set `GEMINI_API_KEY` and `GEMINI_MODEL` in the worker/process environment. Choose a model
+available to your project that supports structured output and the required image/audio types.
+There is deliberately no guessed model default. `.env.example` documents the variables;
+the module does not auto-load `.env` files. Never commit keys or paste them into chat.
 
-Put a genuine, consented UTF-8 report in an ignored `private-inputs/` folder:
+For your own consented UTF-8 report in the ignored `private-inputs/` folder:
 
 ```powershell
 uv run --frozen civicmesh-extract --text-file private-inputs/report.txt --allow-paid-call
 ```
 
-This sends the report to Gemini and may incur charges. Without the flag the CLI
-refuses to call the provider. The CLI performs extraction only; it does not create
-reports, jobs or checkpoints. It prints the extraction to your terminal, so treat
-that terminal output as private citizen data. Do not attach private reports to PRs.
+For a real image or recorded audio file, add one or more `--media` arguments:
 
-No live paid call was made while implementing or testing this milestone.
-
-## Backend integration contract
-
-Import the library through its installed package:
-
-```python
-from civicmesh_ai.graph.workflow import build_workflow, initial_state
-from civicmesh_ai.providers.gemini import GeminiProvider
-from civicmesh_ai.schemas import ReportInput
-from langgraph.types import Command
-
-# These values must come from the authenticated backend/worker, not model output.
-provider = GeminiProvider.from_environment()
-graph = build_workflow(provider, checkpointer=backend_checkpoint_saver)
-config = {"configurable": {"thread_id": persisted_workflow_thread_id}}
-state = initial_state(ReportInput.model_validate(stored_report_payload))
-paused_or_done = await graph.ainvoke(state, config)
-
-# After authorizing the answer and validating it as Clarification or ReviewDecision:
-resumed = await graph.ainvoke(Command(resume=validated_answer), config)
-# Close provider resources during worker shutdown:
-await provider.close()
+```text
+--media <existing-evidence-uuid> image/jpeg private-inputs/photo.jpg
+--media <existing-evidence-uuid> audio/webm private-inputs/recording.webm
 ```
 
-The snippet is an integration outline, not a standalone executable script. The
-backend supplies `backend_checkpoint_saver`, the persisted thread identifier,
-stored report payload and authorized resume data.
+These placeholders describe arguments, not sample operational IDs. Supply the genuine
+evidence UUID associated with your file. Text is optional when media is supplied. The CLI
+does not authenticate storage ownership; it is an operator tool for explicit local inputs.
+Production workflows fetch only backend-authorized media. The CLI performs extraction only,
+not report creation, job processing, routing or complaint submission.
 
-Initial report fields: `report_id`, `text`, optional `category`, optional `location`.
-Location fields: `latitude`, `longitude`, `confirmed: true`.
-Model input excludes report IDs and confirmed coordinates. Citizen text itself
-may contain personal information; consent/redaction policies remain backend concerns.
+The flag authorizes transmitting the input to Gemini and potentially incurring charges.
+The output appears in your terminal and can contain private citizen information.
+No live paid calls were made during implementation/testing.
 
-With `ainvoke`, an interrupt is returned under `__interrupt__`. Each interrupt
-value contains a kind: `clarification` or `extraction_review`. Clarification includes
-field names and questions. Review includes the extraction and effective location/category.
-The backend must return these only to the authorized owner/reviewer.
+## Media constraints
 
-Clarification reply: optional `text`, `category`, `location`, with at least one
-nonempty answer. Review reply: `{"approved": true}` or `{"approved": false}`.
-Validation rejects extra fields. A human-selected category conflicting with the
-extraction triggers clarification; a selected category cannot alone make unrelated
-model output in-scope. Final output is under `result` and follows `ExtractionResult`.
+- Images: JPEG, PNG, WebP, at most 10 MiB each.
+- Recorded audio: WebM, Ogg, MP4, MPEG/MP3, WAV, at most 20 MiB each.
+- At most 10 attachments, and **12 MiB combined raw bytes per inline request**. The
+  combined limit is tighter than individual limits to leave base64/JSON headroom.
+- Reject unknown MIME types, obvious signature mismatches, empty objects, duplicate IDs,
+  missing/extra media and oversize requests before model calls.
+- The AI package never fetches media URLs or uploads extra copies through Gemini Files API.
+  Files exceeding the inline limit require smaller/compressed inputs through the backend.
+- Signature checks are only a first filter. Backend must verify actual content, decoding,
+  ownership, storage binding, consent and retention. Strip sensitive metadata as appropriate.
+- Only evidence IDs enter checkpoints; raw bytes stay transient. Confirmed coordinate fields
+  and report/incident identifiers are excluded from model evidence, although citizen text and
+  images themselves can disclose location or personal information.
 
-Backend responsibilities before production integration:
+## Full report workflow
 
-1. Verify identity and ownership before starting, reading or resuming a thread.
-   Thread IDs are not authorization. Never expose arbitrary graph state updates.
-2. Persist a unique thread ID with each workflow run; do not reuse finished threads
-   for new reports. Serialize resumes and reject stale/repeated answers at the API layer.
-3. Supply an initialized durable PostgreSQL checkpointer and test process restarts.
-   Tests here use memory only and do not establish production durability.
-4. Run the graph in a worker, persist job transitions and result ownership, and apply
-   bounded persistent retries only when appropriate. This module does not provide
-   exactly-once execution or crash-safe paid-call deduplication.
-5. Translate `AIError.code` and `retryable` into the shared error/job contract. Do not
-   return raw validation errors, provider payloads or checkpoint content to clients.
-6. Treat saved state as private. Define encryption, retention and deletion policies.
-   Keep remote tracing off unless explicitly approved for private citizen data.
+```mermaid
+flowchart TD
+  Extract[extract_report] --> Missing[identify_missing_information]
+  Missing -->|missing, budget available| Clarify[request_clarification interrupt]
+  Clarify --> Extract
+  Missing -->|budget exhausted| Incomplete[needs_information]
+  Missing -->|complete| Review[extraction_review interrupt]
+  Review -->|approved| Candidates[find_incident_candidates]
+  Review -->|rejected| End[Stop]
+  Candidates --> Priority[assess_priority]
+  Priority --> Authority[lookup_authority]
+  Authority -->|no supported authority| Unavailable[authority_unavailable]
+  Authority -->|supported| Draft[prepare_complaint]
+  Draft --> ReviewDraft[complaint_review interrupt]
+  ReviewDraft --> Packet[approved_draft or rejected_draft]
+```
 
-## Verification and limits
+`graph.report.build_report_workflow(provider, tools=..., checkpointer=...)` builds the
+complete flow. `graph.workflow.build_workflow(...)` retains extraction-only support.
+Start the full flow with `initial_report_state(report, owner_id=verified_owner_id)`.
+`ReportInput` contains report_id, optional text/evidence_ids, category and confirmed location.
+Text or evidence is required. Backend APIs must coordinate these internal schemas before
+exposing them; this package does not independently define the shared HTTP contract.
 
-Implementation checks on Python 3.11: 34 tests passed; Ruff lint and import/bytecode
-checks passed. The real SDK's JSON/schema conversion is also exercised through an
-isolated local HTTP transport, with no external request.
+All tools receive the authenticated owner, stored report ID, effective category and the
+latest citizen-confirmed location. Match candidates must be unique and category-compatible.
+Sources must include document_id, authority_id/name, jurisdiction, URL, retrieved_at,
+verified_at and a supporting passage. The backend verifies officialness and locality.
+The model cannot create tool permissions, choose arbitrary fetch URLs or change identity.
 
-Tests use isolated provider doubles, never operational/demo data or runtime fallbacks.
-They exercise interrupt/resume behavior, bounded clarification, category conflicts,
-separate thread state, invalid answers, schema constraints, SDK request construction,
-sanitized failures, and the CLI paid-call gate.
+No retrieved sources means no routing model call and no complaint. A recommendation is
+accepted only if every citation belongs to its supplied authority. Complaint observations
+must be exact excerpts from approved extraction text, and its citations must be a subset of
+the recommended authority's sources. This checks binding, not semantic truth: a human must
+still verify that the draft's wording, source interpretation and requested action are sound.
 
-Prompt-injection tests verify instruction/data separation and prohibited output
-fields. They do not prove that a live model resists every injection. Model summaries
-still require review, and the model has no tools or permission-setting ability.
+Final packet includes evidence references and original source metadata; it is private and
+does not imply publication, submission or receipt. Review approval is limited to that draft.
+External submission, if added later, needs separate authorization and idempotency.
 
-Not implemented in this milestone: photo/audio ingestion, priority assessment,
-matching integration, authority retrieval, complaint generation, follow-up assessment,
-durable PostgreSQL checkpoint wiring or frontend/API integration. These are subsequent
-AI milestones requiring backend contracts and genuine evidence; no dummy outputs exist.
+## Follow-up workflow
 
-References used for the adapter and workflow:
+Use `graph.follow_up.build_follow_up_workflow(...)` and `initial_follow_up_state(...)`.
+Input: existing incident_id, baseline extraction, distinct baseline/follow-up evidence IDs,
+optional citizen text, timezone-aware observed_at and a confirmed same-location flag.
+
+Outputs: appears_resolved, partly_resolved, persists, insufficient_evidence.
+Missing before/after evidence or missing same-location confirmation returns
+insufficient_evidence without a model call. Audio/text alone cannot establish a visual
+condition. Stronger outcomes must cite supplied images from both time points. A real model
+must also judge visibility/comparability; the code cannot infer those facts from file headers.
+Every outcome pauses at `follow_up_review`. The reviewed result records attribution and
+observed_at, and never changes official authority status.
+
+## Resume and durable storage
+
+`ainvoke` returns pending interrupts under `__interrupt__`; each has a kind and private payload.
+Reply shapes:
+
+- clarification: optional text/category/location, with at least one nonempty answer.
+- extraction_review, complaint_review, follow_up_review: `{"approved": true}` or false.
+
+Resume with `Command(resume=validated_reply)` using the **same persisted thread ID**.
+Never reuse a completed thread for another report, change its owner, or accept arbitrary
+state updates from a client. The backend must authorize every read/resume, serialize concurrent
+answers, and prevent stale/repeated requests. Thread IDs are not authentication.
+
+For local durable development, use `checkpoints.sqlite_checkpointer(Path(...))` as an async
+context manager. The file contains private report state; use a protected, ignored path.
+A test closes its initial saver, starts a distinct process to resume the extraction review,
+then reopens the resulting complaint review. Completed model nodes are not rerun in that test.
+
+For production, use `checkpoints.postgres_checkpointer(secret_psycopg_dsn)`. This adapter
+opens an existing PostgreSQL checkpoint store; it never runs remote schema setup. The backend
+must inspect its database and explicitly provision the installed saver's schema using its
+reviewed migration process before use. Use a PostgreSQL DSN, not a SQLAlchemy URL, and require
+appropriate TLS. PostgreSQL connection/schema/RLS behavior was not tested here.
+
+## Backend handoff
+
+The backend teammate implements `tools.interfaces.BackendTools`:
+
+1. load_evidence: owner-authorized, report/incident-bound private bytes; no raw client URLs.
+2. incident_candidates: location/category/time/similarity matching, at most 20 candidates.
+3. authority_sources: verified official passages for the locality, at most 10 documents.
+
+The backend also supplies authenticated context, stored report/incident IDs, worker/jobs,
+durable checkpoint provisioning, result persistence and private retrieval. Run graphs in
+the worker, not a request handler. Model calls have a 30-second timeout and one SDK attempt.
+The worker owns a bounded persistent retry budget and must prevent duplicate consequential
+actions. Checkpointing alone does not guarantee exactly-once execution or paid-call deduplication
+when a process crashes between a provider response and checkpoint commit.
+
+Without worker retries, a report uses at most four extraction calls plus one each for
+priority, routing and drafting (at most seven model calls). A follow-up uses at most one
+model call. Missing sources and insufficient comparison evidence reduce these counts.
+
+Translate AIError.code/retryable into job/API errors; sanitize database and Pydantic errors
+without returning their private input values. Disable remote tracing unless explicitly
+approved for citizen data. Define retention/deletion for evidence, state and logs.
+
+## Remaining integration verification
+
+Local verification: 68 tests passed on Python 3.11, Ruff lint passed, and the package
+imports and compiles. This includes every Gemini response schema through the SDK using
+an isolated HTTP transport, with no external model requests.
+
+AI-owned functionality is implemented and locally tested. These checks require external setup:
+
+- Supply real Gemini credentials/model and consented Hindi/English text, photos and audio;
+  check extraction quality, uncertainty, prompt-injection resilience, latency and costs.
+- Backend implements the three tool adapters and supplies genuine verified sources/evidence.
+- Provision and test PostgreSQL checkpoint storage, job retry recovery and ownership isolation.
+- Connect frontend clarification/review flows through the authenticated API.
+- Run a genuine report -> persistence -> AI -> frontend result, then a real follow-up.
+
+Automated tests use isolated fixtures only; no fixture becomes product/demo data. Live model
+accuracy, production durability, official routing correctness and end-to-end integration are
+not claimed by passing offline tests. Do not report fabricated success or impact metrics.
+
+Official references consulted:
 - [Google Gen AI SDK](https://googleapis.github.io/python-genai/)
 - [Structured output](https://ai.google.dev/gemini-api/docs/structured-output)
+- [Image understanding](https://ai.google.dev/gemini-api/docs/image-understanding)
+- [Audio understanding](https://ai.google.dev/gemini-api/docs/audio)
 - [LangGraph interrupts](https://docs.langchain.com/oss/python/langgraph/interrupts)
 - [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence)

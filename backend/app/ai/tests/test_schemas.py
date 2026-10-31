@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 
 def test_unknown_fields_remain_unknown():
+    """Verify unknown fields remain unknown."""
     extraction = Extraction()
     assert extraction.category is None
     assert extraction.summary is None
@@ -27,6 +28,7 @@ def test_unknown_fields_remain_unknown():
     ],
 )
 def test_model_cannot_emit_trusted_fields(extra):
+    """Verify model cannot emit trusted fields."""
     with pytest.raises(ValidationError):
         Extraction.model_validate(extra)
 
@@ -41,11 +43,13 @@ def test_model_cannot_emit_trusted_fields(extra):
     ],
 )
 def test_location_bounds_and_confirmation(latitude, longitude, confirmed):
+    """Verify location bounds and confirmation."""
     with pytest.raises(ValidationError):
         ConfirmedLocation(latitude=latitude, longitude=longitude, confirmed=confirmed)
 
 
 def test_review_requires_boolean_and_answers_require_content():
+    """Verify review requires boolean and answers require content."""
     with pytest.raises(ValidationError):
         ReviewDecision(approved="true")
     with pytest.raises(ValidationError):
@@ -53,6 +57,7 @@ def test_review_requires_boolean_and_answers_require_content():
 
 
 def test_input_and_history_are_bounded():
+    """Verify input and history are bounded."""
     for text in ["  ", "x" * 10001]:
         with pytest.raises(ValidationError):
             ExtractionRequest(text=text)

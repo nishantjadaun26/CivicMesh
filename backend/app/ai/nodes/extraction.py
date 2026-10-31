@@ -1,4 +1,5 @@
 from civicmesh_ai.graph.state import WorkflowState
+from civicmesh_ai.media import load_media
 from civicmesh_ai.providers.base import ExtractionProvider
 from civicmesh_ai.schemas import (
     Clarification,
@@ -19,10 +20,13 @@ QUESTIONS = {
 
 
 def context(state: WorkflowState):
+    """Revalidate persisted input and apply answers without changing the original report."""
     report = ReportInput.model_validate(state["report"])
     answers = [Clarification.model_validate(answer) for answer in state.get("answers", [])]
     # Validation bounds history before it can cause further model requests.
-    request = ExtractionRequest(text=report.text, clarifications=answers)
+    request = ExtractionRequest(
+        text=report.text, evidence_ids=report.evidence_ids, clarifications=answers
+    )
     category, location = report.category, report.location
     for answer in answers:
         category = answer.category if answer.category is not None else category
@@ -30,13 +34,32 @@ def context(state: WorkflowState):
     return report, request, category, location
 
 
-def build_nodes(provider: ExtractionProvider):
+def build_nodes(provider: ExtractionProvider, tools=None):
+    """Build extraction nodes with no persistence or storage implementation assumptions."""
+
     async def extract_report(state: WorkflowState):
-        _, request, _, _ = context(state)
-        extraction = Extraction.model_validate(await provider.extract(request))
+        """Fetch bound private media outside checkpoints and validate provider output."""
+        from civicmesh_ai.identity import owner
+
+        if tools is not None or state["report"].get("evidence_ids"):
+            owner(state)
+        report, request, _, _ = context(state)
+        if report.evidence_ids:
+            media = await load_media(
+                tools,
+                owner_id=owner(state),
+                report_id=report.report_id,
+                incident_id=None,
+                evidence_ids=report.evidence_ids,
+            )
+            output = await provider.extract(request, media=media)
+        else:
+            output = await provider.extract(request)
+        extraction = Extraction.model_validate(output)
         return {"extraction": extraction.model_dump(mode="json")}
 
     def identify_missing_information(state: WorkflowState):
+        """Require a supported category, summary and citizen-confirmed geographic location."""
         _, _, category, location = context(state)
         extraction = Extraction.model_validate(state["extraction"])
         missing = []
@@ -52,6 +75,7 @@ def build_nodes(provider: ExtractionProvider):
         return {"missing_fields": missing}
 
     def request_clarification(state: WorkflowState):
+        """Interrupt before another paid call and append only a validated citizen answer."""
         reply = interrupt(
             {
                 "kind": "clarification",
@@ -69,6 +93,7 @@ def build_nodes(provider: ExtractionProvider):
         return {"answers": answers}
 
     def finish(state: WorkflowState, status: str):
+        """Emit an attributed extraction result that never claims official authority action."""
         report, _, category, location = context(state)
         extraction = Extraction.model_validate(state["extraction"])
         result = ExtractionResult(
@@ -82,6 +107,7 @@ def build_nodes(provider: ExtractionProvider):
         return {"result": result.model_dump(mode="json")}
 
     def review_extraction(state: WorkflowState):
+        """Require explicit review before downstream matching, routing or drafting."""
         _, _, category, location = context(state)
         reply = interrupt(
             {
@@ -96,6 +122,7 @@ def build_nodes(provider: ExtractionProvider):
         return finish(state, "ready_for_backend" if decision.approved else "rejected")
 
     def needs_information(state: WorkflowState):
+        """Stop after the clarification budget, preserving unresolved information."""
         return finish(state, "needs_information")
 
     return {

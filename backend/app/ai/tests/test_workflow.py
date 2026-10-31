@@ -15,6 +15,7 @@ class TestProvider:
     __test__ = False
 
     def __init__(self, output=None):
+        """Initialize isolated test state and record expected provider interactions."""
         self.output = (
             output
             if output is not None
@@ -25,12 +26,16 @@ class TestProvider:
         self.requests = []
 
     async def extract(self, request):
+        """Provide isolated fixtures for extract verification."""
         self.requests.append(request)
         return self.output
 
 
 def test_review_pause_and_resume_do_not_repeat_model_call(report):
+    """Verify review pause and resume do not repeat model call."""
+
     async def scenario():
+        """Exercise review pause and resume do not repeat model call in one event loop."""
         provider = TestProvider()
         graph = build_workflow(provider, checkpointer=InMemorySaver())
         config = {"configurable": {"thread_id": "test-review"}}
@@ -46,7 +51,10 @@ def test_review_pause_and_resume_do_not_repeat_model_call(report):
 
 
 def test_clarification_preserves_original_and_reextracts(report):
+    """Verify clarification preserves original and reextracts."""
+
     async def scenario():
+        """Exercise clarification preserves original and reextracts in one event loop."""
         provider = TestProvider()
         graph = build_workflow(provider, checkpointer=InMemorySaver())
         original = ReportInput(report_id=report.report_id, text=report.text)
@@ -74,7 +82,10 @@ def test_clarification_preserves_original_and_reextracts(report):
 
 
 def test_three_unanswered_rounds_stop_without_inventing_data(report):
+    """Verify three unanswered rounds stop without inventing data."""
+
     async def scenario():
+        """Exercise three unanswered rounds stop without inventing data in one event loop."""
         provider = TestProvider(Extraction())
         graph = build_workflow(provider, checkpointer=InMemorySaver())
         config = {"configurable": {"thread_id": "test-limit"}}
@@ -91,7 +102,10 @@ def test_three_unanswered_rounds_stop_without_inventing_data(report):
 
 
 def test_category_conflict_cannot_skip_review(report):
+    """Verify category conflict cannot skip review."""
+
     async def scenario():
+        """Exercise category conflict cannot skip review in one event loop."""
         provider = TestProvider(Extraction(category="garbage", summary="Garbage reported."))
         graph = build_workflow(provider, checkpointer=InMemorySaver())
         config = {"configurable": {"thread_id": "test-conflict"}}
@@ -105,7 +119,10 @@ def test_category_conflict_cannot_skip_review(report):
 
 
 def test_invalid_resume_is_rejected_before_another_paid_call(report):
+    """Verify invalid resume is rejected before another paid call."""
+
     async def scenario():
+        """Exercise invalid resume is rejected before another paid call in one event loop."""
         provider = TestProvider(Extraction())
         graph = build_workflow(provider, checkpointer=InMemorySaver())
         config = {"configurable": {"thread_id": "test-invalid"}}
@@ -118,7 +135,10 @@ def test_invalid_resume_is_rejected_before_another_paid_call(report):
 
 
 def test_threads_keep_separate_state(report):
+    """Verify threads keep separate state."""
+
     async def scenario():
+        """Exercise threads keep separate state in one event loop."""
         graph = build_workflow(TestProvider(), checkpointer=InMemorySaver())
         first = {"configurable": {"thread_id": "one"}}
         second = {"configurable": {"thread_id": "two"}}
@@ -133,5 +153,6 @@ def test_threads_keep_separate_state(report):
 
 
 def test_checkpoint_store_is_required():
+    """Verify checkpoint store is required."""
     with pytest.raises(AIError, match="checkpoint"):
         build_workflow(TestProvider(), checkpointer=None)

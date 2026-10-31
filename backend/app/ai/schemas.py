@@ -8,11 +8,12 @@ ShortText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1
 ReportText = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10000)
 ]
+OptionalReportText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=10000)]
 MAX_CLARIFICATION_ROUNDS = 3
 
 
 class Schema(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, revalidate_instances="always")
 
 
 class ConfirmedLocation(Schema):
@@ -32,10 +33,22 @@ class Extraction(Schema):
 
 
 class ReportInput(Schema):
+    """Stored citizen input supplied by the owner-authorized backend."""
+
     report_id: UUID
-    text: ReportText
+    text: OptionalReportText = ""
+    evidence_ids: list[UUID] = Field(default_factory=list, max_length=10)
     category: Category | None = None
     location: ConfirmedLocation | None = None
+
+    @model_validator(mode="after")
+    def has_evidence(self):
+        """Require genuine text or referenced media and reject repeated attachments."""
+        if not self.text and not self.evidence_ids:
+            raise ValueError("Text or evidence is required")
+        if len(set(self.evidence_ids)) != len(self.evidence_ids):
+            raise ValueError("Duplicate evidence identifiers")
+        return self
 
 
 class Clarification(Schema):
@@ -45,6 +58,7 @@ class Clarification(Schema):
 
     @model_validator(mode="after")
     def has_answer(self):
+        """Reject empty answers before resuming a paid extraction step."""
         if not self.text and self.category is None and self.location is None:
             raise ValueError("Provide text, a category or a confirmed location")
         return self
@@ -53,10 +67,20 @@ class Clarification(Schema):
 class ExtractionRequest(Schema):
     """Only evidence is sent to the model; report identifiers are deliberately excluded."""
 
-    text: ReportText
+    text: OptionalReportText = ""
+    evidence_ids: list[UUID] = Field(default_factory=list, max_length=10)
     clarifications: list[Clarification] = Field(
         default_factory=list, max_length=MAX_CLARIFICATION_ROUNDS
     )
+
+    @model_validator(mode="after")
+    def has_evidence(self):
+        """Validate the content-only request independently of the persisted report."""
+        if not self.text and not self.evidence_ids:
+            raise ValueError("Text or evidence is required")
+        if len(set(self.evidence_ids)) != len(self.evidence_ids):
+            raise ValueError("Duplicate evidence identifiers")
+        return self
 
 
 class ReviewDecision(Schema):

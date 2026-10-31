@@ -8,6 +8,7 @@ from civicmesh_ai.schemas import ConfirmedLocation, ReportInput
 
 @pytest.fixture
 def report():
+    """Provide isolated fixtures for report verification."""
     return ReportInput(
         report_id=UUID(int=1),
         text="Water is leaking from a pipe.",

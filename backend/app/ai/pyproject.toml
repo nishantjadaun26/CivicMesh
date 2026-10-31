@@ -1,9 +1,12 @@
 [project]
 name = "civicmesh-ai"
 version = "0.1.0"
-description = "CivicMesh text extraction and clarification workflow"
+description = "CivicMesh multimodal reporting, complaint drafting and follow-up AI workflows"
 requires-python = ">=3.11,<3.14"
 dependencies = ["google-genai==1.75.0", "langgraph==1.2.19", "pydantic==2.14.2", "httpx==0.28.1"]
+
+[project.optional-dependencies]
+checkpoints = ["langgraph-checkpoint-postgres==3.2.0", "langgraph-checkpoint-sqlite==3.1.3"]
 
 [project.scripts]
 civicmesh-extract = "civicmesh_ai.cli:main"
