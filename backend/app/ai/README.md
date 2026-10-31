@@ -172,6 +172,11 @@ appropriate TLS. PostgreSQL connection/schema/RLS behavior was not tested here.
 
 ## Backend handoff
 
+Use `WorkflowCoordinator` for typed, owner-scoped start/inspect/resume/retry operations.
+It rejects reused workflow IDs and stale review replies under an explicitly supplied
+workflow lock. Read [the backend integration guide](BACKEND-INTEGRATION.md) for the exact
+worker call sequence, status mapping and production lock requirements.
+
 The backend teammate implements `tools.interfaces.BackendTools`:
 
 1. load_evidence: owner-authorized, report/incident-bound private bytes; no raw client URLs.
@@ -195,7 +200,7 @@ approved for citizen data. Define retention/deletion for evidence, state and log
 
 ## Remaining integration verification
 
-Local verification: 69 tests passed on Python 3.11, Ruff lint passed, and the package
+Local verification: 87 tests passed on Python 3.11, Ruff lint passed, and the package
 imports and compiles. This includes every Gemini response schema through the SDK using
 an isolated HTTP transport, with no external model requests.
 
