@@ -11,6 +11,8 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -20,10 +22,10 @@ jobs:
       - name: Install dependencies
         run: |
           uv venv .venv
-          uv pip install -e "backend[dev]" greenlet aiosqlite ruff
+          uv pip install --python .venv/bin/python -e "./backend[dev]" greenlet aiosqlite ruff
       - name: Lint with ruff
-        run: uv run --python .venv ruff check backend scripts
+        run: .venv/bin/ruff check backend scripts
       - name: Run test suite
-        run: uv run --python .venv pytest -v backend/tests
+        run: .venv/bin/pytest -v backend/tests
       - name: Verify OpenAPI contract export
-        run: uv run --python .venv python scripts/export_openapi.py
+        run: .venv/bin/python scripts/export_openapi.py
