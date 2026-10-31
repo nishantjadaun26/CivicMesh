@@ -1,0 +1,19 @@
+name: CodeRabbit configuration
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, feat/frontend, feat/ai-workflow, feat/backend]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install jsonschema==4.26.0 PyYAML==6.0.3
+      - run: curl --fail --location https://coderabbit.ai/integrations/schema.v2.json --output /tmp/coderabbit-schema.json
+      - run: python scripts/validate_coderabbit.py /tmp/coderabbit-schema.json

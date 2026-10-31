@@ -1,28 +1,44 @@
 # CivicMesh
 
-Shared citizen evidence for garbage accumulation and water leaks in one locality.
-This repository contains the **foundation, not a working reporting product**.
-No operational data, government acknowledgements, AI results or metrics are fabricated.
+Folder structure and CodeRabbit setup for our three-person hackathon team.
+Application code, dependencies, API contracts, database migrations and deployment
+configuration are left for the team to implement.
 
-Start with [Windows setup](docs/setup.md), [architecture](docs/architecture.md),
-[API contracts](docs/api-contracts.md), and [team ownership](docs/team-ownership.md).
+```text
+frontend/src/
+  app/
+  components/
+  features/{reports,incidents,auth}/
+  lib/{api,supabase}/
+  types/
+backend/
+  app/
+    api/{routes,dependencies}/
+    core/
+    schemas/
+    database/{models,repositories}/
+    services/{reports,incidents,matching,routing,storage,jobs}/
+    ai/{graph,nodes,tools,prompts,providers}/
+    worker/
+  tests/
+supabase/migrations/
+contracts/examples/
+docs/
+.github/workflows/
+```
 
-| Area | Working foundation | Remaining implementation |
+Empty folders use `.gitkeep` so Git tracks them. Generate `contracts/openapi.json`
+as a file when the backend contract is implemented; it is not pre-created here.
+
+| Teammate | Branch | Module |
 |---|---|---|
-| Frontend | Responsive Next.js shell; report/incident/detail/sign-in pages; media selection, recording, manual location; typed API client | Clarification/timeline/follow-up flows, session UX, end-to-end report results |
-| API | Validated contracts, request IDs, errors, explicit CORS, Supabase token verification adapter, liveness | Owner-authorized repositories, actual submissions and upload signing |
-| Database | 11 SQLAlchemy models, PostGIS/pgvector migration, private access policies, public projection | Apply and test against local Supabase; production role provisioning |
-| AI | Typed state, Gemini schema validation, tool boundaries, LangGraph builder, review interrupts | Multimodal ingestion, priority, source-backed complaints, follow-up assessment |
-| Jobs | Persistent schema, leasing/retry interfaces, fail-closed worker entry point | Durable queue adapter, checkpoint saver and crash/retry testing |
-| Review | CI, PR template, schema-validated CodeRabbit configuration | Owner activation if needed; observe first genuine PR review |
+| 1 | feat/frontend | Frontend |
+| 2 | feat/ai-workflow | AI workflow |
+| 3 | feat/backend | Backend and Supabase |
 
-`GET /health` returns liveness with `ready: false`. Other endpoints return honest
-401, 422, 503 or 501 errors until their dependencies and implementations exist.
-Neither selecting credentials nor setting a model name enables missing persistence.
+`main` is the integration branch. All branches share the trimmed setup.
+See [team ownership](docs/team-ownership.md) and [Git workflow](docs/git-workflow.md).
 
-The shared foundation is integrated on `main`. Team branches start at the same commit:
-`feat/frontend`, `feat/ai-workflow`, `feat/backend`. See [Git workflow](docs/git-workflow.md)
-and [CodeRabbit review](docs/code-review.md).
-
-No paid services are created by this setup. Deployment configuration is a template;
-see [deployment](docs/deployment.md). [Verification](docs/verification.md) records limits.
+CodeRabbit configuration, schema-validation CI and the PR template are included.
+GitHub App activation is **unverified**; no actual PR review has been observed.
+See [activation and review instructions](docs/code-review.md).

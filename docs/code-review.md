@@ -38,6 +38,18 @@ CodeRabbit does not replace tests, privacy review, or human understanding.
 Validate changes with `scripts/validate_coderabbit.py` after downloading the official schema.
 CI repeats validation. If official fields change, inspect the new schema instead of guessing keys.
 
+Local PowerShell validation (Python 3.11+):
+
+```powershell
+python -m pip install jsonschema==4.26.0 PyYAML==6.0.3
+New-Item -ItemType Directory -Force .cache | Out-Null
+Invoke-WebRequest https://coderabbit.ai/integrations/schema.v2.json -OutFile .cache/coderabbit-schema.json
+python scripts/validate_coderabbit.py
+```
+
+This is configuration validation only. No frontend/backend implementation or application
+test workflow is included in the trimmed setup.
+
 Sources: [configuration](https://docs.coderabbit.ai/reference/configuration),
 [schema](https://coderabbit.ai/integrations/schema.v2.json),
 [commands](https://docs.coderabbit.ai/reference/review-commands).

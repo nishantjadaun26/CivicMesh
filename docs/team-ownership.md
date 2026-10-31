@@ -1,20 +1,13 @@
 # Team ownership
 
-| Teammate | Branch | Owned paths and work |
+| Teammate | Branch | Owned paths |
 |---|---|---|
-| 1 | feat/frontend | frontend/: reporting, map, recording, clarification forms, incident timeline, follow-up UI |
-| 2 | feat/ai-workflow | backend/app/ai/: Gemini, LangGraph, extraction, clarification, complaints, follow-up assessment |
-| 3 | feat/backend | backend/app/api, database, services, worker, supabase/: authentication, persistence, matching, routing retrieval, jobs, deployment |
+| 1 | feat/frontend | frontend/ |
+| 2 | feat/ai-workflow | backend/app/ai/ |
+| 3 | feat/backend | backend/app/api/, backend/app/database/, backend/app/services/, backend/app/worker/, supabase/ |
 
-Coordinate changes to `backend/app/schemas`, contracts, dependency files/locks, migrations,
-root deployment and CI. AI extraction schema edits need teammate 3 review; API changes need
-teammate 1 review and regenerated types. Do not directly access the database from AI nodes.
-Backend tools own identity, filtering, retrieval and provenance. Frontend never receives a
-service-role key. No CODEOWNERS file invents unknown GitHub usernames.
+Coordinate future shared schemas, API contracts, dependency files, migrations,
+deployment and CI changes before editing. No teammate GitHub usernames are assumed.
 
-First integration milestone: **real report submission -> persistence -> real AI extraction ->
-frontend result**. Teammate 3 first implements atomic text-report + job persistence and owner reads;
-teammate 2 connects extraction through a durable worker/checkpointer; teammate 1 displays job
-status and the real extraction. Use a genuine consenting citizen observation. Keep media signing,
-matching and authority routing disabled until individually verified. Record a real failure as a
-failure; never substitute a sample result. One small cross-module PR should validate this path.
+This setup contains folders and review configuration only. Each teammate implements
+their module through small PRs into main, with CodeRabbit feedback and human review.

@@ -1,6 +1,6 @@
 # Three-person integration workflow
 
-All three feature branches start at the same completed foundation commit. `main` is integrated.
+All three feature branches share the folder-only setup and CodeRabbit configuration. `main` is integrated.
 Each teammate uses their own clone:
 
 ```powershell
@@ -35,10 +35,12 @@ git push origin feat/ai-workflow
 Use merge commits for long-lived shared branches to preserve ancestry. Do not force-push, delete
 teammates' branches, or overwrite history. A squash merge can be used for short-lived topic PRs,
 but these long-lived module branches are easiest to maintain with normal merge commits.
-Coordinate shared files before editing, regenerate contracts, and commit dependency locks together.
+Coordinate shared files before editing. When contracts and dependencies are introduced,
+regenerate contracts and commit dependency locks with their corresponding changes.
 
-Recommended main protection: PR required, at least one human approval, required observed backend
-and frontend CI checks, conversations resolved, no force pushes. Repository settings were not
+Recommended main protection: PR required, at least one human approval, required observed CI
+checks, conversations resolved, no force pushes. Only CodeRabbit configuration validation is
+currently configured; application checks should be added with implementation. Repository settings were not
 changed. Do not require an assumed CodeRabbit status name; verify the actual successful check on
 a genuine PR first. Ensure main remains the default branch for CodeRabbit's main-only automation.
 
