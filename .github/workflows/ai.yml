@@ -1,0 +1,26 @@
+name: AI module checks
+on:
+  pull_request:
+    branches: [main]
+    paths: ['backend/app/ai/**', '.github/workflows/ai.yml']
+  push:
+    branches: [feat/ai-workflow]
+    paths: ['backend/app/ai/**', '.github/workflows/ai.yml']
+permissions:
+  contents: read
+jobs:
+  ai:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/app/ai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.8.15'
+          python-version: '3.11'
+      - run: uv sync --frozen
+      - run: uv run --frozen ruff check .
+      - run: uv run --frozen pytest -q
+      - run: uv run --frozen civicmesh-extract --help
