@@ -141,3 +141,40 @@ def test_reuploaded_baseline_is_not_new_follow_up_evidence():
         for i in (1, 2)
     ]
     assert not sufficient_comparison(request_for_test(), media)
+
+
+@pytest.mark.parametrize("outcome", ["appears_resolved", "partly_resolved", "persists"])
+@pytest.mark.parametrize("follow_up_id,accepted", [(2, False), (3, True)])
+def test_cited_follow_up_must_differ_from_every_baseline(outcome, follow_up_id, accepted):
+    """An uncited new upload cannot validate a citation duplicating an uncited baseline."""
+    from civicmesh_ai.follow_up import sufficient_comparison, validate_follow_up
+
+    request = request_for_test().model_copy(
+        update={
+            "baseline_evidence_ids": [UUID(int=1), UUID(int=4)],
+            "follow_up_evidence_ids": [UUID(int=2), UUID(int=3)],
+        }
+    )
+    media = [
+        MediaEvidence(
+            evidence_id=UUID(int=eid), mime_type="image/png", content=b"\x89PNG\r\n\x1a\n" + content
+        )
+        for eid, content in [
+            (1, b"baseline-a"),
+            (4, b"baseline-b"),
+            (2, b"baseline-b"),
+            (3, b"new-follow-up"),
+        ]
+    ]
+    assessment = FollowUpAssessment(
+        outcome=outcome,
+        rationale="Test comparison.",
+        evidence_ids=[UUID(int=1), UUID(int=follow_up_id)],
+    )
+    assert sufficient_comparison(request, media)
+    if accepted:
+        assert validate_follow_up(assessment, request, media) == assessment
+    else:
+        with pytest.raises(AIError) as error:
+            validate_follow_up(assessment, request, media)
+        assert error.value.code == "unsupported_evidence"

@@ -42,12 +42,25 @@ def validate_follow_up(
             raise AIError(
                 "unsupported_assessment", "Evidence cannot support a condition assessment."
             )
-        images = {item.evidence_id for item in media if item.mime_type.startswith("image/")}
-        cited = set(value.evidence_ids) & images
+        image_hashes = {
+            item.evidence_id: sha256(item.content).digest()
+            for item in media
+            if item.mime_type.startswith("image/")
+        }
+        baseline_hashes = {
+            digest for eid, digest in image_hashes.items() if eid in request.baseline_evidence_ids
+        }
+        distinct_follow_up_ids = {
+            eid
+            for eid, digest in image_hashes.items()
+            if eid in request.follow_up_evidence_ids and digest not in baseline_hashes
+        }
+        cited = set(value.evidence_ids) & image_hashes.keys()
         if not cited.intersection(request.baseline_evidence_ids) or not cited.intersection(
-            request.follow_up_evidence_ids
+            distinct_follow_up_ids
         ):
             raise AIError(
-                "unsupported_evidence", "Condition assessment must cite before and after images."
+                "unsupported_evidence",
+                "Condition assessment must cite a baseline and a distinct follow-up image.",
             )
     return value
