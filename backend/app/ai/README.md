@@ -53,7 +53,7 @@ the module does not auto-load `.env` files. Never commit keys or paste them into
 For your own consented UTF-8 report in the ignored `private-inputs/` folder:
 
 ```powershell
-uv run --frozen civicmesh-extract --text-file private-inputs/report.txt --allow-paid-call
+uv run --frozen civicmesh-extract --text-file private-inputs/report.txt --allow-api-call
 ```
 
 For a real image or recorded audio file, add one or more `--media` arguments:
@@ -70,6 +70,10 @@ Production workflows fetch only backend-authorized media. The CLI performs extra
 not report creation, job processing, routing or complaint submission.
 
 The flag authorizes transmitting the input to Gemini and potentially incurring charges.
+Use the [free-tier verification guide](FREE-TIER-VERIFICATION.md) to confirm project/model
+eligibility and configure the key locally. `--check-config` performs an offline check with
+no report read or API request. The older `--allow-paid-call` spelling remains an alias;
+neither flag verifies or changes project billing.
 The output appears in your terminal and can contain private citizen information.
 No live paid calls were made during implementation/testing.
 
@@ -200,7 +204,7 @@ approved for citizen data. Define retention/deletion for evidence, state and log
 
 ## Remaining integration verification
 
-Local verification: 87 tests passed on Python 3.11, Ruff lint passed, and the package
+Local verification: 91 tests passed on Python 3.11, Ruff lint passed, and the package
 imports and compiles. This includes every Gemini response schema through the SDK using
 an isolated HTTP transport, with no external model requests.
 

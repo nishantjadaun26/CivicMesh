@@ -1,7 +1,9 @@
-"""Explicit live extraction. No fixture reports or automatic paid calls."""
+"""Explicit live extraction and offline configuration checks; no automatic API calls."""
 
 import argparse
 import asyncio
+import json
+import os
 from pathlib import Path
 from uuid import UUID
 
@@ -13,7 +15,7 @@ from pydantic import ValidationError
 
 
 async def extract_file(path: Path | None, attachments=()):
-    """Read bounded private input only after the CLI's explicit paid-call authorization."""
+    """Read bounded private input only after explicit API-call authorization."""
     text = ""
     if path is not None:
         with path.open("rb") as source:
@@ -50,10 +52,37 @@ def main():
         default=[],
         metavar=("EVIDENCE_ID", "MIME_TYPE", "FILE"),
     )
-    parser.add_argument("--allow-paid-call", action="store_true")
+    parser.add_argument(
+        "--check-config",
+        action="store_true",
+        help="Check local configuration without reading reports or calling Gemini.",
+    )
+    parser.add_argument(
+        "--allow-api-call",
+        action="store_true",
+        help="Allow one Gemini extraction request; billing depends on your project and model.",
+    )
+    parser.add_argument(
+        "--allow-paid-call", dest="allow_api_call", action="store_true", help=argparse.SUPPRESS
+    )
     args = parser.parse_args()
-    if not args.allow_paid_call:
-        parser.error("This sends report evidence to Gemini. Pass --allow-paid-call to proceed.")
+    if args.check_config:
+        key_configured = bool(os.getenv("GEMINI_API_KEY", "").strip())
+        model_configured = bool(os.getenv("GEMINI_MODEL", "").strip())
+        print(
+            json.dumps(
+                {
+                    "key_configured": key_configured,
+                    "model_configured": model_configured,
+                    "billing_status": "not_verified",
+                    "api_request_made": False,
+                },
+                indent=2,
+            )
+        )
+        parser.exit(0 if key_configured and model_configured else 1)
+    if not args.allow_api_call:
+        parser.error("This sends report evidence to Gemini. Pass --allow-api-call to proceed.")
     if args.text_file is None and not args.media:
         parser.error("Provide --text-file or --media.")
     try:
