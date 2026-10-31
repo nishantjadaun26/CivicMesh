@@ -1,0 +1,4 @@
+src/types/api.generated.ts
+package-lock.json
+.next/
+node_modules/

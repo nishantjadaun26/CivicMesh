@@ -1,0 +1,14 @@
+.cache/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+*.log

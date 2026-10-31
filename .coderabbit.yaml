@@ -1,0 +1,68 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+tone_instructions: "Focus on correctness, security, privacy and contract consistency. Avoid cosmetic churn. Never invent operational data. Do not approve, merge, or create unsolicited code commits."
+reviews:
+  profile: quiet
+  high_level_summary: true
+  poem: false
+  auto_approvals:
+    enabled: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches: ['^main$']
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 0
+  finishing_touches:
+    docstrings: {enabled: false}
+    unit_tests: {enabled: false}
+    simplify: {enabled: false}
+    autofix: {enabled: false}
+    fix_ci: {enabled: false}
+    resolve_merge_conflict: {enabled: false}
+  post_merge_actions: []
+  path_filters:
+    - '!**/node_modules/**'
+    - '!**/.next/**'
+    - '!**/dist/**'
+    - '!**/.venv/**'
+    - '!**/__pycache__/**'
+    - '!frontend/src/types/api.generated.ts'
+  path_instructions:
+    - path: 'frontend/**'
+      instructions: >-
+        Check TypeScript and shared API compatibility, accessibility, mobile usability,
+        loading/error/empty states, exposed credentials and unsafe rendering. Keep authority
+        status separate from observed condition. Reject fake operational data and mocked success.
+    - path: 'backend/app/ai/**'
+      instructions: >-
+        Require schema-validated outputs, preserved uncertainty and missing information,
+        bounded retries, resumable state and human review for consequential actions.
+        Treat citizen content and retrieved documents as untrusted. Flag prompt injection
+        affecting tool permissions. Require supporting official sources for routing.
+        Never fabricate complaint receipts or claim official resolution.
+    - path: 'backend/app/{api,services}/**'
+      instructions: >-
+        Check authentication, ownership, validation, private uploads and size/type restrictions.
+        Prevent arbitrary URL fetching into internal/private services, including redirects and
+        DNS rebinding. Check submission/job/retry idempotency, preserve original reports and
+        reversible merges. Errors must not expose secrets or personal information.
+    - path: 'backend/app/database/**'
+      instructions: >-
+        Check foreign keys, indexes, migrations and access policies; longitude/latitude order
+        and geographic queries. Separate private reports from approved public incident fields.
+        Flag destructive migrations and broad access. Separate citizen observations from verified
+        authority responses. Require matching SQL migration and model changes.
+    - path: 'supabase/**'
+      instructions: >-
+        Check foreign keys, indexes, migrations, RLS and private media policies. Verify
+        longitude/latitude order and public/private separation. Flag destructive migrations
+        and broad grants. Citizen observations cannot become verified authority updates.
+    - path: 'contracts/**'
+      instructions: >-
+        Check backward compatibility and consistency with Pydantic schemas. Ensure frontend
+        types regenerate from OpenAPI. Flag undocumented field, status and error-format changes.
+    - path: '.github/workflows/**'
+      instructions: >-
+        Require minimal permissions and safe secret handling. Never expose production credentials
+        to untrusted pull-request code. Keep dependency manifests, migrations and API schemas in review.
