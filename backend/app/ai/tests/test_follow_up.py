@@ -45,7 +45,11 @@ class EvidenceTools:
         """Provide distinct before/after fixture media without any storage connection."""
         self.calls.append(kwargs)
         return [
-            MediaEvidence(evidence_id=eid, mime_type="image/png", content=b"\x89PNG\r\n\x1a\n")
+            MediaEvidence(
+                evidence_id=eid,
+                mime_type="image/png",
+                content=b"\x89PNG\r\n\x1a\n" + str(eid).encode(),
+            )
             for eid in kwargs["evidence_ids"]
         ]
 
@@ -124,3 +128,16 @@ def test_fabricated_or_one_sided_follow_up_citations_are_rejected(ids):
             )
 
     asyncio.run(scenario())
+
+
+def test_reuploaded_baseline_is_not_new_follow_up_evidence():
+    """Duplicate image bytes under new IDs cannot support a fresh condition assessment."""
+    from civicmesh_ai.follow_up import sufficient_comparison
+
+    media = [
+        MediaEvidence(
+            evidence_id=UUID(int=i), mime_type="image/png", content=b"\x89PNG\r\n\x1a\nsame-photo"
+        )
+        for i in (1, 2)
+    ]
+    assert not sufficient_comparison(request_for_test(), media)

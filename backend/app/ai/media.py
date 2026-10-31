@@ -56,6 +56,8 @@ def validate_media(
     media: Sequence[MediaEvidence], expected_ids: Sequence[UUID]
 ) -> list[MediaEvidence]:
     """Require an exact, unique evidence binding and a bounded inline request size."""
+    if len(media) > 10:
+        raise AIError("evidence_mismatch", "Use at most 10 attachments.")
     parsed = [MediaEvidence.model_validate(item) for item in media]
     ids = [item.evidence_id for item in parsed]
     if (

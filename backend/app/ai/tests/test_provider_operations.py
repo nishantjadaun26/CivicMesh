@@ -114,7 +114,9 @@ def test_all_sdk_operations_with_local_http(monkeypatch, operation):
             else:
                 media = [
                     MediaEvidence(
-                        evidence_id=UUID(int=i), mime_type="image/png", content=b"\x89PNG\r\n\x1a\n"
+                        evidence_id=UUID(int=i),
+                        mime_type="image/png",
+                        content=b"\x89PNG\r\n\x1a\n" + str(i).encode(),
                     )
                     for i in (1, 2)
                 ]

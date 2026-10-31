@@ -1,6 +1,7 @@
 """Conservative follow-up comparison and citation checks independent of the model."""
 
 from collections.abc import Sequence
+from hashlib import sha256
 
 from civicmesh_ai.assessment import FollowUpAssessment, FollowUpInput
 from civicmesh_ai.errors import AIError
@@ -10,10 +11,21 @@ from civicmesh_ai.media import MediaEvidence
 def sufficient_comparison(request: FollowUpInput, media: Sequence[MediaEvidence]) -> bool:
     """Require same-location confirmation and distinct before/after images for visual claims."""
     images = {item.evidence_id for item in media if item.mime_type.startswith("image/")}
+    baseline_hashes = {
+        sha256(item.content).digest()
+        for item in media
+        if item.evidence_id in request.baseline_evidence_ids and item.evidence_id in images
+    }
+    follow_up_hashes = {
+        sha256(item.content).digest()
+        for item in media
+        if item.evidence_id in request.follow_up_evidence_ids and item.evidence_id in images
+    }
     return (
         request.same_location_confirmed
         and bool(images.intersection(request.baseline_evidence_ids))
         and bool(images.intersection(request.follow_up_evidence_ids))
+        and bool(follow_up_hashes - baseline_hashes)
     )
 
 

@@ -117,6 +117,7 @@ class GeminiProvider:
         self, extraction: Extraction, sources: list[OfficialSource]
     ) -> AuthorityRecommendation:
         """Recommend only a supplied verified authority; no sources means no model call."""
+        extraction = Extraction.model_validate(extraction)
         sources = [OfficialSource.model_validate(source) for source in sources]
         if len(sources) > 10 or len({s.document_id for s in sources}) != len(sources):
             raise AIError(
@@ -141,6 +142,8 @@ class GeminiProvider:
         sources: list[OfficialSource],
     ) -> ComplaintContent:
         """Draft factual content only after routing has supporting official provenance."""
+        extraction = Extraction.model_validate(extraction)
+        sources = [OfficialSource.model_validate(source) for source in sources]
         recommendation = validate_recommendation(recommendation, sources)
         if recommendation.authority_id is None:
             raise AIError(

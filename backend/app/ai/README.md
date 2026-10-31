@@ -138,6 +138,7 @@ Input: existing incident_id, baseline extraction, distinct baseline/follow-up ev
 optional citizen text, timezone-aware observed_at and a confirmed same-location flag.
 
 Outputs: appears_resolved, partly_resolved, persists, insufficient_evidence.
+Reuploaded baseline images with identical bytes do not count as new follow-up evidence.
 Missing before/after evidence or missing same-location confirmation returns
 insufficient_evidence without a model call. Audio/text alone cannot establish a visual
 condition. Stronger outcomes must cite supplied images from both time points. A real model
@@ -194,7 +195,7 @@ approved for citizen data. Define retention/deletion for evidence, state and log
 
 ## Remaining integration verification
 
-Local verification: 68 tests passed on Python 3.11, Ruff lint passed, and the package
+Local verification: 69 tests passed on Python 3.11, Ruff lint passed, and the package
 imports and compiles. This includes every Gemini response schema through the SDK using
 an isolated HTTP transport, with no external model requests.
 
