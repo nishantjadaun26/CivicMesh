@@ -1,0 +1,29 @@
+name: Backend module checks
+on:
+  pull_request:
+    branches: [main]
+    paths: ['backend/**', 'contracts/**', 'supabase/**', '.github/workflows/backend.yml']
+  push:
+    branches: [feat/backend]
+    paths: ['backend/**', 'contracts/**', 'supabase/**', '.github/workflows/backend.yml']
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.8.15'
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          uv venv .venv
+          uv pip install -e "backend[dev]" greenlet aiosqlite ruff
+      - name: Lint with ruff
+        run: uv run --python .venv ruff check backend scripts
+      - name: Run test suite
+        run: uv run --python .venv pytest -v backend/tests
+      - name: Verify OpenAPI contract export
+        run: uv run --python .venv python scripts/export_openapi.py
