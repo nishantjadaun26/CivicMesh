@@ -15,6 +15,7 @@ export interface ReportDraft {
   audio?: Blob;
   campaignId?: string;
   evidenceConsent: boolean;
+  shareOnMap: boolean;
   idempotencyKey?: string;
 }
 
@@ -41,6 +42,10 @@ export const citizenService = {
     }
     const payload = JSON.stringify({
       text: [draft.title.trim(), draft.description.trim(), draft.location.trim()].filter(Boolean).join('\n'),
+      public_summary: draft.shareOnMap
+        ? [draft.title.trim(), draft.description.trim()].filter(Boolean).join('\n')
+        : '',
+      share_on_map: draft.shareOnMap,
       category: draft.category === 'Water leak' ? 'water_leak' : 'garbage',
       location: { latitude: draft.coordinates.lat, longitude: draft.coordinates.lng, confirmed: true },
       evidence_ids: saved.ids,

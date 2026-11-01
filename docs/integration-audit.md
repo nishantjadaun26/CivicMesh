@@ -72,7 +72,7 @@ new follow-up processing.
 | `GET /jobs/{id}` | Owner-only status/prompt/result; no raw graph state or task exception |
 | `POST /jobs/{id}/answers` | Owner, quota, row lock, waiting stage, checkpoint, interrupt and action-specific schema checked before enqueue |
 | `POST /reports/{id}/answers` | Compatibility clarification endpoint with the same saved-action validation |
-| `GET /incidents` and `/{id}` | Approved public projections only; paginated lists; no private source report or media leakage |
+| `GET /incidents` and `/{id}` | Public projections only, including explicitly shared community reports; paginated lists; no private identity, exact report coordinates, or media leakage |
 | `POST /incidents/{id}/follow-ups` | Verified citizen, quota, public target, fresh owned uploads, same-location confirmation, idempotent private job |
 | `GET /incidents/{id}/follow-ups/{follow_up_id}` | Owner-only private follow-up result |
 | `/health/live`, `/health`, `/health/ready` | Distinct process, diagnostic and dependency/worker readiness checks; no model calls |

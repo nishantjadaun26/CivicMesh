@@ -150,7 +150,7 @@
           "Reports"
         ],
         "summary": "Submit a new citizen report",
-        "description": "Persists a report, binds verified media evidence, and enqueues an asynchronous AI processing job.",
+        "description": "Persists a private report, binds private evidence, and enqueues AI processing. If the citizen opts in, it also publishes a privacy-safe, unverified map projection.",
         "operationId": "create_report_reports_post",
         "parameters": [
           {
@@ -391,6 +391,89 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports/{report_id}/map-sharing": {
+      "delete": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Remove an owner's report from the public map",
+        "description": "Revoke map sharing without deleting the owner's private report or evidence.",
+        "operationId": "remove_report_from_map_reports__report_id__map_sharing_delete",
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Report Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -749,8 +832,8 @@
         "tags": [
           "Incidents"
         ],
-        "summary": "List approved public incidents",
-        "description": "Returns public projections of verified community incidents. Omits private citizen details.",
+        "summary": "List public incidents",
+        "description": "Returns public projections, including citizen reports explicitly shared to the map. Omits private citizen identity and evidence.",
         "operationId": "list_public_incidents_incidents_get",
         "parameters": [
           {
@@ -1795,6 +1878,12 @@
             "description": "Verified official authority response only",
             "default": "unknown"
           },
+          "community_report": {
+            "type": "boolean",
+            "title": "Community Report",
+            "description": "True when explicitly shared from a citizen report",
+            "default": false
+          },
           "is_public": {
             "type": "boolean",
             "title": "Is Public",
@@ -1866,6 +1955,12 @@
             "description": "Verified official authority response only",
             "default": "unknown"
           },
+          "community_report": {
+            "type": "boolean",
+            "title": "Community Report",
+            "description": "True when explicitly shared from a citizen report",
+            "default": false
+          },
           "is_public": {
             "type": "boolean",
             "title": "Is Public",
@@ -1894,7 +1989,7 @@
           "updated_at"
         ],
         "title": "IncidentPublicResponse",
-        "description": "Approved public incident projection. Omits private citizen details."
+        "description": "Public map projection. Omits private citizen identity and evidence."
       },
       "JobAnswerRequest": {
         "properties": {
@@ -2275,6 +2370,17 @@
             "title": "Text",
             "default": ""
           },
+          "public_summary": {
+            "type": "string",
+            "maxLength": 2500,
+            "title": "Public Summary",
+            "default": ""
+          },
+          "share_on_map": {
+            "type": "boolean",
+            "title": "Share On Map",
+            "default": false
+          },
           "evidence_ids": {
             "items": {
               "type": "string",
@@ -2396,6 +2502,18 @@
               }
             ],
             "title": "Job Id"
+          },
+          "public_incident_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Incident Id"
           },
           "extraction_result": {
             "anyOf": [

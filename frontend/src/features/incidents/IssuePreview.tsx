@@ -39,7 +39,9 @@ function PreviewContents({ issue, onClose }: Props) {
     <h2 tabIndex={-1}>{issue.title}</h2><p>{issue.location}</p>
     <h3>Observed condition</h3><p>{issue.observedCondition}</p>
     <h3>Authority status</h3><p>{issue.authorityStatus === 'unknown' ? 'No verified official update recorded.' : issue.authorityStatus}</p>
-    <p>Approved public record. Private citizen identity and evidence are not published.</p>
+    {issue.status === 'Community report · unverified'
+      ? <p>Community-reported and not independently verified. Reporter identity and uploaded evidence are not public.</p>
+      : <p>Approved public record. Private citizen identity and evidence are not published.</p>}
     {issue.timeline.length > 0 && <><h3>Recorded authority updates</h3><WorkflowData value={issue.timeline} /></>}
     {!user ? <Link to="/profile">Sign in to submit follow-up evidence</Link> : <form onSubmit={submit}>
       <h3>Add a private follow-up</h3>

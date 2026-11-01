@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 from backend.app.core.config import get_settings
 from backend.app.core.errors import ConflictError
-from backend.app.database.models import Evidence, Job, Profile, Report
+from backend.app.database.models import Evidence, Incident, IncidentReport, Job, Profile, Report
 from backend.app.schemas.reports import ReportCreateRequest
 from backend.app.services.storage.media import StorageService
 from sqlalchemy import select
@@ -25,6 +25,18 @@ class JobQueueService:
                 or report.location_confirmed != (location.confirmed if location else False)
                 or ids != set(request.evidence_ids)):
             raise ConflictError("Idempotency key was already used for a different report.")
+        public_incident = (await db.execute(
+            select(Incident)
+            .join(IncidentReport, IncidentReport.incident_id == Incident.id)
+            .where(IncidentReport.report_id == report.id, IncidentReport.is_active.is_(True))
+            .limit(1)
+        )).scalar_one_or_none()
+        if bool(public_incident) != request.share_on_map:
+            raise ConflictError("Idempotency key was already used with different map-sharing consent.")
+        if request.share_on_map and public_incident:
+            expected_summary = request.public_summary.strip() or f"Community report: {request.category}"
+            if public_incident.observed_condition != expected_summary:
+                raise ConflictError("Idempotency key was already used with a different public summary.")
 
     @staticmethod
     async def create_report_with_job(
@@ -148,6 +160,27 @@ class JobQueueService:
                 db=db,
                 report_id=report_id,
             )
+
+        if request.share_on_map:
+            # Publish only the citizen-approved summary and a roughly 100 m rounded pin.
+            # Raw report text, exact coordinates, owner identity, and media stay private.
+            if request.category is None or request.location is None:
+                raise ConflictError("A public map report requires a category and confirmed location.")
+            public_lat = round(request.location.latitude, 3)
+            public_lon = round(request.location.longitude, 3)
+            summary = request.public_summary.strip() or f"Community report: {request.category}"
+            incident = Incident(
+                category=request.category,
+                latitude=public_lat,
+                longitude=public_lon,
+                observed_condition=summary,
+                authority_status="unknown",
+                is_public=True,
+                location=f"SRID=4326;POINT({public_lon} {public_lat})",
+            )
+            db.add(incident)
+            await db.flush()
+            db.add(IncidentReport(incident_id=incident.id, report_id=report_id, is_active=True))
 
         job = Job(
             id=job_id,

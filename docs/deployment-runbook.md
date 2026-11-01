@@ -307,11 +307,14 @@ non-sensitive observation in the agreed staging locality for provider verificati
 | Follow-up | Fresh same-location photo creates a private job; absent authorized baseline returns insufficient evidence; official status remains unchanged |
 | Browser/deployment | Direct deep links work, HTTPS/CORS match, mobile layout works, configured tile attribution visible, no server credentials in bundles |
 
-There is no automatic report-to-public-incident publication or merge. Existing
-public incident views require actual moderated records. If no such records exist,
-the correct incident screen is empty. Campaigns, support, badges and rewards are
-outside the implemented pilot and remain unavailable. Do not manufacture records
-to make smoke screenshots look populated.
+Reports remain private unless the submitter explicitly selects **Share this report
+on the community map**. The public projection contains the selected category,
+title/description summary, and a location rounded to about 100 m; it excludes the
+reporter's identity, exact coordinates, and uploaded evidence. Public entries are
+labeled as unverified community reports. Unshared reports remain private and do
+not appear on the map. Campaigns, support, badges and rewards are outside the
+implemented pilot and remain unavailable. Do not manufacture records to make
+smoke screenshots look populated.
 
 For staging cleanup, pause only staging workers, collect the exact test report/job
 and storage object IDs, and remove the selected objects through the Storage owner

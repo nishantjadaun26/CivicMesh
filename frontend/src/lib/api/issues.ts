@@ -8,8 +8,11 @@ function readIncident(item: ApiIncident): Issue {
   return { id: item.id, title: item.category === 'garbage' ? 'Garbage accumulation' : 'Water leak',
     category: item.category === 'garbage' ? 'Garbage accumulation' : 'Water leak',
     description: item.observed_condition, observedCondition: item.observed_condition,
-    authorityStatus: item.authority_status, status: 'Published observation', coordinates: { lat: item.latitude, lng: item.longitude },
-    location: `${item.latitude.toFixed(5)}, ${item.longitude.toFixed(5)}`, reportedAt: item.created_at, timeline: item.timeline ?? [] };
+    authorityStatus: item.authority_status, status: item.community_report ? 'Community report · unverified' : 'Published observation', coordinates: { lat: item.latitude, lng: item.longitude },
+    location: item.community_report
+      ? `Approx. ${item.latitude.toFixed(3)}, ${item.longitude.toFixed(3)}`
+      : `${item.latitude.toFixed(5)}, ${item.longitude.toFixed(5)}`,
+    reportedAt: item.created_at, timeline: item.timeline ?? [] };
 }
 
 export const issueService = {

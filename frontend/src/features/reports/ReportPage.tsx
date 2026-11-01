@@ -21,6 +21,7 @@ function ReportForm() {
     location: '',
     coordinates: MAP_CENTER,
     evidenceConsent: false,
+    shareOnMap: false,
     campaignId: campaigns.some(c => c.id === params.get('campaign'))
       ? params.get('campaign')!
       : undefined,
@@ -242,6 +243,18 @@ function ReportForm() {
                 <dt>Campaign evidence</dt>
                 <dd>{draft.evidenceConsent ? 'Consent given' : 'Not shared'}</dd>
               </dl>
+
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={draft.shareOnMap}
+                  onChange={event => setDraft({ ...draft, shareOnMap: event.target.checked })}
+                />
+                Share this report on the community map
+              </label>
+              <p className="help">
+                If shared, other users can see its category, your title and description, and an approximate location (about 100 m). Your account and uploaded photo stay private. It will be labeled as a community report that has not been independently verified. Only share details safe for anyone to see.
+              </p>
 
               {busy && progress && (
                 <div

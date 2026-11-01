@@ -17,6 +17,8 @@ from pydantic import Field, model_validator
 class ReportCreateRequest(BaseSchema):
     """Citizen input for creating a report."""
     text: OptionalReportText = ""
+    public_summary: str = Field(default="", max_length=2500)
+    share_on_map: bool = Field(default=False, strict=True)
     evidence_ids: list[UUID] = Field(default_factory=list, max_length=10)
     category: Category | None = None
     location: ConfirmedLocation | None = None
@@ -27,6 +29,8 @@ class ReportCreateRequest(BaseSchema):
             raise ValueError("Report must contain either a description or at least one piece of evidence.")
         if len(self.evidence_ids) != len(set(self.evidence_ids)):
             raise ValueError("Duplicate evidence identifiers are not allowed.")
+        if self.share_on_map and (self.category is None or self.location is None):
+            raise ValueError("A public map report requires a category and confirmed location.")
         return self
 
 
@@ -57,6 +61,7 @@ class ReportResponse(BaseSchema):
     evidence_ids: list[UUID]
     status: str
     job_id: UUID | None
+    public_incident_id: UUID | None = None
     extraction_result: ReportCompletion | None = None
     created_at: datetime
     updated_at: datetime

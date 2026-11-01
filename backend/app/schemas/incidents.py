@@ -1,4 +1,4 @@
-"""Schemas for approved public incidents, timelines, and follow-ups."""
+"""Schemas for public incident projections, timelines, and follow-ups."""
 
 from datetime import datetime
 from typing import Any
@@ -16,13 +16,14 @@ class StatusEventResponse(BaseSchema):
 
 
 class IncidentPublicResponse(BaseSchema):
-    """Approved public incident projection. Omits private citizen details."""
+    """Public map projection. Omits private citizen identity and evidence."""
     id: UUID
     category: Category
     latitude: float
     longitude: float
     observed_condition: str = Field(description="Citizen-observed condition or AI assessment")
     authority_status: str = Field(default="unknown", description="Verified official authority response only")
+    community_report: bool = Field(default=False, description="True when explicitly shared from a citizen report")
     is_public: bool = True
     created_at: datetime
     updated_at: datetime

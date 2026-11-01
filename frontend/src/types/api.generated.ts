@@ -90,7 +90,7 @@ export interface paths {
         put?: never;
         /**
          * Submit a new citizen report
-         * @description Persists a report, binds verified media evidence, and enqueues an asynchronous AI processing job.
+         * @description Persists a private report, binds private evidence, and enqueues AI processing. If the citizen opts in, it also publishes a privacy-safe, unverified map projection.
          */
         post: operations["create_report_reports_post"];
         delete?: never;
@@ -114,6 +114,26 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reports/{report_id}/map-sharing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove an owner's report from the public map
+         * @description Revoke map sharing without deleting the owner's private report or evidence.
+         */
+        delete: operations["remove_report_from_map_reports__report_id__map_sharing_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -184,8 +204,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List approved public incidents
-         * @description Returns public projections of verified community incidents. Omits private citizen details.
+         * List public incidents
+         * @description Returns public projections, including citizen reports explicitly shared to the map. Omits private citizen identity and evidence.
          */
         get: operations["list_public_incidents_incidents_get"];
         put?: never;
@@ -549,6 +569,12 @@ export interface components {
              */
             authority_status: string;
             /**
+             * Community Report
+             * @description True when explicitly shared from a citizen report
+             * @default false
+             */
+            community_report: boolean;
+            /**
              * Is Public
              * @default true
              */
@@ -568,7 +594,7 @@ export interface components {
         };
         /**
          * IncidentPublicResponse
-         * @description Approved public incident projection. Omits private citizen details.
+         * @description Public map projection. Omits private citizen identity and evidence.
          */
         IncidentPublicResponse: {
             /**
@@ -596,6 +622,12 @@ export interface components {
              * @default unknown
              */
             authority_status: string;
+            /**
+             * Community Report
+             * @description True when explicitly shared from a citizen report
+             * @default false
+             */
+            community_report: boolean;
             /**
              * Is Public
              * @default true
@@ -764,6 +796,16 @@ export interface components {
              * @default
              */
             text: string;
+            /**
+             * Public Summary
+             * @default
+             */
+            public_summary: string;
+            /**
+             * Share On Map
+             * @default false
+             */
+            share_on_map: boolean;
             /** Evidence Ids */
             evidence_ids?: string[];
             /** Category */
@@ -804,6 +846,8 @@ export interface components {
             status: string;
             /** Job Id */
             job_id: string | null;
+            /** Public Incident Id */
+            public_incident_id?: string | null;
             extraction_result?: components["schemas"]["ReportCompletion"] | null;
             /**
              * Created At
@@ -1177,6 +1221,64 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ReportResponse"];
                 };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_report_from_map_reports__report_id__map_sharing_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unauthorized */
             401: {

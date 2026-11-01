@@ -9,7 +9,7 @@ from backend.app.api.dependencies.auth import (
     require_write_user,
 )
 from backend.app.core.errors import ConflictError
-from backend.app.database.models import Evidence, Job, Report
+from backend.app.database.models import Evidence, Incident, IncidentReport, Job, Report
 from backend.app.database.session import get_db
 from backend.app.schemas.reports import (
     ClarificationAnswerRequest,
@@ -17,11 +17,19 @@ from backend.app.schemas.reports import (
     ReportResponse,
 )
 from backend.app.services.jobs.queue import JobQueueService
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
+
+
+async def _public_incident_id(report_id: UUID, db: AsyncSession) -> UUID | None:
+    return (await db.execute(
+        select(IncidentReport.incident_id)
+        .where(IncidentReport.report_id == report_id, IncidentReport.is_active.is_(True))
+        .limit(1)
+    )).scalar_one_or_none()
 
 
 @router.post(
@@ -29,7 +37,7 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
     response_model=ReportResponse,
     status_code=201,
     summary="Submit a new citizen report",
-    description="Persists a report, binds verified media evidence, and enqueues an asynchronous AI processing job.",
+    description="Persists a private report, binds private evidence, and enqueues AI processing. If the citizen opts in, it also publishes a privacy-safe, unverified map projection.",
 )
 async def create_report(
     request: ReportCreateRequest,
@@ -60,6 +68,7 @@ async def create_report(
         evidence_ids=evidence_ids,
         status=report.status,
         job_id=job.id,
+        public_incident_id=await _public_incident_id(report.id, db),
         extraction_result=report.extraction_result,
         created_at=report.created_at,
         updated_at=report.updated_at,
@@ -95,10 +104,45 @@ async def get_report(
         evidence_ids=evidence_ids,
         status=report.status,
         job_id=job_id,
+        public_incident_id=await _public_incident_id(report.id, db),
         extraction_result=report.extraction_result,
         created_at=report.created_at,
         updated_at=report.updated_at,
     )
+
+
+@router.delete(
+    "/{report_id}/map-sharing",
+    status_code=204,
+    summary="Remove an owner's report from the public map",
+)
+async def remove_report_from_map(
+    report: Annotated[Report, Depends(require_report_owner)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _user_id: Annotated[UUID, Depends(require_write_user)],
+) -> Response:
+    """Revoke map sharing without deleting the owner's private report or evidence."""
+    memberships = (await db.execute(
+        select(IncidentReport).where(
+            IncidentReport.report_id == report.id,
+            IncidentReport.is_active.is_(True),
+        )
+    )).scalars().all()
+    for membership in memberships:
+        membership.is_active = False
+        other_memberships = await db.execute(
+            select(IncidentReport.id).where(
+                IncidentReport.incident_id == membership.incident_id,
+                IncidentReport.is_active.is_(True),
+                IncidentReport.report_id != report.id,
+            ).limit(1)
+        )
+        if other_memberships.scalar_one_or_none() is None:
+            incident = await db.get(Incident, membership.incident_id)
+            if incident is not None:
+                incident.is_public = False
+    await db.commit()
+    return Response(status_code=204)
 
 
 @router.post(
@@ -136,6 +180,7 @@ async def submit_clarification_answers(
         evidence_ids=evidence_ids,
         status=report.status,
         job_id=job.id if job else None,
+        public_incident_id=await _public_incident_id(report.id, db),
         extraction_result=report.extraction_result,
         created_at=report.created_at,
         updated_at=report.updated_at,
