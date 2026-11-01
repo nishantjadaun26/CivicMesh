@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { citizenService, useAppData, getUserCampaignMemberships, demoUser } from '../../lib/api/platform';
 import { CategoryIcon, StatusBadge } from '../../components/IssueMeta';
@@ -21,12 +21,22 @@ export function CampaignsPage() {
 
   const campaign = campaigns.find(c => c.id === id);
 
+  const pendingRef = useRef<Set<string>>(new Set());
+  const [pendingId, setPendingId] = useState<string | null>(null);
+
   async function join(cid: string) {
+    if (pendingRef.current.has(cid)) return;
+    pendingRef.current.add(cid);
+    setPendingId(cid);
+    setMessage('');
     try {
       await citizenService.toggleCampaign(cid);
       setMessage('Campaign participation updated on this device.');
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Could not update participation. Try again.');
+    } finally {
+      pendingRef.current.delete(cid);
+      setPendingId(null);
     }
   }
 
@@ -107,9 +117,23 @@ export function CampaignsPage() {
                 <div className="form-actions">
                   <button
                     className="primary-button"
+                    disabled={pendingId === campaign.id}
+                    aria-busy={pendingId === campaign.id}
+                    aria-pressed={isJoined(campaign.id)}
+                    aria-label={
+                      pendingId === campaign.id
+                        ? `Updating membership for ${campaign.title} campaign`
+                        : isJoined(campaign.id)
+                        ? `Leave ${campaign.title} campaign`
+                        : `Join ${campaign.title} campaign`
+                    }
                     onClick={() => join(campaign.id)}
                   >
-                    {isJoined(campaign.id) ? 'Leave campaign' : 'Join campaign'}
+                    {pendingId === campaign.id
+                      ? 'Updating…'
+                      : isJoined(campaign.id)
+                      ? 'Leave campaign'
+                      : 'Join campaign'}
                   </button>
                   <Link
                     className="secondary-button"
@@ -276,9 +300,23 @@ export function CampaignsPage() {
                         </Link>
                         <button
                           className="primary-button"
+                          disabled={pendingId === c.id}
+                          aria-busy={pendingId === c.id}
+                          aria-pressed={isJoined(c.id)}
+                          aria-label={
+                            pendingId === c.id
+                              ? `Updating membership for ${c.title} campaign`
+                              : isJoined(c.id)
+                              ? `Leave ${c.title} campaign`
+                              : `Join ${c.title} campaign`
+                          }
                           onClick={() => join(c.id)}
                         >
-                          {isJoined(c.id) ? 'Leave campaign' : 'Join campaign'}
+                          {pendingId === c.id
+                            ? 'Updating…'
+                            : isJoined(c.id)
+                            ? 'Leave campaign'
+                            : 'Join campaign'}
                         </button>
                       </div>
                     </div>

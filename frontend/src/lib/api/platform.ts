@@ -131,6 +131,11 @@ function commit(next: State) {
   listeners.forEach(fn => fn());
 }
 
+function notify(next: State) {
+  state = next;
+  listeners.forEach(fn => fn());
+}
+
 export const getState = () => state;
 export function useAppData() {
   return useSyncExternalStore(fn => {
@@ -235,7 +240,9 @@ export function setUserCampaignMemberships(userId: string, ids: Set<string>): vo
   try {
     localStorage.setItem(`civicmesh.campaign-membership.${userId}`, JSON.stringify([...ids]));
   } catch {
-    // browser storage unavailable
+    throw new Error(
+      'Your campaign membership could not be saved. Free some browser storage and try again.'
+    );
   }
 }
 
@@ -455,17 +462,20 @@ export const citizenService: CitizenService = {
     const currentUser = await getCurrentUser();
     const userId = currentUser ? currentUser.id : demoUser.id;
 
-    const memberships = getUserCampaignMemberships(userId);
-    const wasJoined = memberships.has(id);
-    if (wasJoined) {
-      memberships.delete(id);
+    const previousMemberships = getUserCampaignMemberships(userId);
+    const nextMemberships = new Set(previousMemberships);
+    if (nextMemberships.has(id)) {
+      nextMemberships.delete(id);
     } else {
-      memberships.add(id);
+      nextMemberships.add(id);
     }
-    setUserCampaignMemberships(userId, memberships);
 
-    // Keep membership changes scoped to the active user rather than inverting shared Campaign.joined
-    commit({
+    // setUserCampaignMemberships throws if storage fails; previous membership is preserved
+    setUserCampaignMemberships(userId, nextMemberships);
+
+    // Notify subscribers without rewriting the unrelated issue list.
+    // Ensure membership updates change the reactive snapshot consumed by useSyncExternalStore.
+    notify({
       ...state,
       campaigns: [...state.campaigns],
     });

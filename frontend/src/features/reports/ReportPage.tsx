@@ -50,12 +50,14 @@ export function ReportPage() {
     if (busy) return;
     setBusy(true);
     setError('');
+    setProgress(null);
     try {
       const issue = await citizenService.createReport(draft, p => {
         setProgress(p);
       });
       setResult(issue);
     } catch (e) {
+      setProgress(null);
       setError(
         e instanceof Error
           ? e.message
@@ -419,7 +421,7 @@ export function ReportPage() {
                 <dd>{draft.evidenceConsent ? 'Consent given' : 'Not shared'}</dd>
               </dl>
 
-              {progress && (
+              {busy && progress && (
                 <div
                   style={{
                     padding: '12px 14px',
@@ -450,9 +452,11 @@ export function ReportPage() {
 
               <p className="notice">
                 {busy
-                  ? progress?.isBackendConnected
-                    ? 'Submitting report to backend services…'
-                    : 'Saving report securely on this device only…'
+                  ? progress
+                    ? progress.isBackendConnected
+                      ? 'Submitting report to backend services…'
+                      : 'Saving report on this device only…'
+                    : 'Preparing your report…'
                   : 'This report has not been sent yet. Review your details before submitting.'}
               </p>
             </>
