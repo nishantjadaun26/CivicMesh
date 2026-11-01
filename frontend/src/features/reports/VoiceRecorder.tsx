@@ -52,7 +52,7 @@ export function VoiceRecorder({ onChange }: { onChange: (blob: Blob | undefined)
         const blob = new Blob(chunks, { type: r.mimeType || 'audio/webm' });
         onChange(blob);
         setUrl(URL.createObjectURL(blob));
-        setFileName('Recorded audio note (Hindi/English)');
+        setFileName('Recorded audio note');
         setRecording(false);
       };
       r.start();
@@ -101,10 +101,10 @@ export function VoiceRecorder({ onChange }: { onChange: (blob: Blob | undefined)
   return (
     <div className="voice-control">
       <h3>
-        Voice description <span>(optional · Hindi or English)</span>
+        Voice description <span>(optional)</span>
       </h3>
       <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '4px 0 10px', lineHeight: '1.5' }}>
-        Record a spoken note in Hindi or English, or choose an existing audio file if microphone access is unavailable.
+        Record a spoken note, or choose an existing audio file if microphone access is unavailable.
       </p>
 
       {!url && (
