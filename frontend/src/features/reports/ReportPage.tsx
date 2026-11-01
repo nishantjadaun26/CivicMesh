@@ -458,7 +458,7 @@ export function ReportPage() {
                   ? progress
                     ? progress.isBackendConnected
                       ? 'Submitting report to backend services…'
-                      : 'Saving report on this device only…'
+                      : 'Preparing your report…'
                     : 'Preparing your report…'
                   : 'This report has not been sent yet. Review your details before submitting.'}
               </p>

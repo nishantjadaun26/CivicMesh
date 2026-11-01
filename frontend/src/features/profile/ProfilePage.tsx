@@ -71,12 +71,12 @@ export function ProfilePage() {
             {user
               ? `Authenticated via Supabase (${user.email})`
               : isConfigured
-              ? 'Supabase Auth ready · Sign in to synchronize your reports'
+              ? 'Supabase Auth ready · Sign in to your account'
               : 'Authentication is not configured'}
           </strong>
           <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
             {user
-              ? 'Access token is automatically attached to backend API requests.'
+              ? 'Reports shown here are from this session. Account history is not connected yet.'
               : isConfigured
               ? 'Sessions and tokens are managed securely in the browser.'
               : 'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment. Private actions require a configured backend.'}

@@ -220,7 +220,7 @@ export const citizenService: CitizenService = {
 
       onProgress?.({
         step: 2,
-        message: 'Uploading encrypted evidence media…',
+        message: 'Evidence files uploaded.',
         isBackendConnected: true,
       });
 
@@ -268,7 +268,7 @@ export const citizenService: CitizenService = {
 
       onProgress?.({
         step: 5,
-        message: 'Extracting incident data via AI verification workflow…',
+        message: 'Awaiting processing status from the backend…',
         reportId: backendReportId,
         jobId: backendJobId ?? undefined,
         isBackendConnected: true,
