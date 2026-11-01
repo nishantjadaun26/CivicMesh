@@ -69,7 +69,10 @@ class Worker:
             ),
         )
 
-    async def run_once(self):
+    async def run_once(self, *, limit: int = 20):
+        """Process up to ``limit`` eligible jobs, then return to the caller."""
+        if not 1 <= limit <= 20:
+            raise ValueError("Worker job limit must be between 1 and 20")
         async with self.sessions() as db:
             ids = list(
                 (
@@ -77,7 +80,7 @@ class Worker:
                         select(Job.id)
                         .where(self.eligible())
                         .order_by(Job.available_at, Job.created_at)
-                        .limit(20)
+                        .limit(limit)
                     )
                 ).scalars()
             )

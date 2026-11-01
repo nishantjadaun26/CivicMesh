@@ -1,5 +1,6 @@
 """Run one sequential polling worker; multiple processes coordinate through PostgreSQL."""
 
+import argparse
 import asyncio
 import logging
 import signal
@@ -11,7 +12,7 @@ from backend.app.worker.runner import Worker
 from civicmesh_ai.providers.gemini import GeminiProvider
 
 
-async def main():
+async def main(*, once: bool = False):
     settings = get_settings()
     from psycopg.conninfo import conninfo_to_dict
     from sqlalchemy.engine import make_url
@@ -30,13 +31,6 @@ async def main():
             "Worker requires direct or session connections, not the Supabase transaction pooler"
         )
     provider = GeminiProvider(api_key=settings.GEMINI_API_KEY, model=settings.GEMINI_MODEL)
-    stop = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for name in (signal.SIGINT, signal.SIGTERM):
-        try:
-            loop.add_signal_handler(name, stop.set)
-        except NotImplementedError:  # Windows development shell.
-            pass
     async with open_checkpointer(settings) as saver:
         worker = Worker(
             sessions=AsyncSessionLocal,
@@ -46,6 +40,22 @@ async def main():
             settings=settings,
         )
         await worker.heartbeat()
+
+        if once:
+            try:
+                await worker.run_once(limit=1)
+            finally:
+                await provider.client.aio.aclose()
+                await engine.dispose()
+            return
+
+        stop = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for name in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(name, stop.set)
+            except NotImplementedError:  # Windows development shell.
+                pass
 
         async def pulse():
             while not stop.is_set():
@@ -72,8 +82,15 @@ async def main():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
+    parser = argparse.ArgumentParser(description="Run the CivicMesh report worker")
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="check for and process at most one queued job, then exit",
+    )
+    args = parser.parse_args()
     try:
-        asyncio.run(main())
+        asyncio.run(main(once=args.once))
     except KeyboardInterrupt:
         pass
     except Exception as error:
