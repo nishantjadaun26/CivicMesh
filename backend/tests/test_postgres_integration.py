@@ -88,9 +88,13 @@ async def test_migrations_rls_storage_postgis_checkpoints_and_session_locks():
         assert (
             len(await (await connection.execute("SELECT id FROM storage.objects")).fetchall()) == 1
         )
-        with pytest.raises(psycopg.errors.InsufficientPrivilege):
-            await connection.execute("UPDATE public.reports SET status='processed'")
+        update = await connection.execute("UPDATE public.reports SET status='processed'")
+        assert update.rowcount == 0  # RLS can reject by filtering every row instead of raising.
         await connection.execute("RESET ROLE")
+        original = await (
+            await connection.execute("SELECT status FROM public.reports WHERE id=%s", (report,))
+        ).fetchone()
+        assert original["status"] == "pending"
         await connection.execute("SET search_path=civicmesh_checkpoints,public")
         saver = AsyncPostgresSaver(connection)
         await saver.setup()
@@ -112,3 +116,57 @@ async def test_migrations_rls_storage_postgis_checkpoints_and_session_locks():
                 ).fetchone()
             )[0]
         await connection.execute("SELECT pg_advisory_unlock(%s)", (lock_key,))
+
+        # Exercise the actual ORM/queue against the migrated schema, including a real race.
+        import asyncio
+
+        from backend.app.database.models import Job
+        from backend.app.schemas.reports import ReportCreateRequest
+        from backend.app.services.jobs.queue import JobQueueService
+        from backend.app.worker.runner import Worker
+        from backend.tests.conftest import get_test_settings
+        from backend.tests.workflow_provider import TestProvider
+        from sqlalchemy import select
+        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+        application_engine = create_async_engine(
+            DSN.replace("postgresql://", "postgresql+asyncpg://", 1)
+        )
+        sessions = async_sessionmaker(application_engine, expire_on_commit=False)
+
+        async def submit():
+            async with sessions() as db:
+                return await JobQueueService.create_report_with_job(
+                    owner_id=owner,
+                    request=ReportCreateRequest(text="An isolated garbage observation"),
+                    idempotency_key="isolated-concurrent-key",
+                    db=db,
+                )
+
+        first, second = await asyncio.gather(submit(), submit())
+        assert first[0].id == second[0].id and first[1].id == second[1].id
+        worker = Worker(
+            sessions=sessions,
+            engine=application_engine,
+            provider=TestProvider(),
+            saver=saver,
+            settings=get_test_settings(),
+        )
+        assert await worker.run_once()
+        async with sessions() as db:
+            saved = (await db.execute(select(Job).where(Job.id == first[1].id))).scalar_one()
+            assert saved.status == "waiting_for_input"
+            assert saved.pending_action["kind"] == "clarification"
+        # Reopen the actual PostgreSQL saver to establish checkpoint persistence across connections.
+        async with await psycopg.AsyncConnection.connect(
+            DSN,
+            autocommit=True,
+            row_factory=dict_row,
+            prepare_threshold=0,
+            options="-c search_path=civicmesh_checkpoints,public",
+        ) as restarted:
+            persisted = await AsyncPostgresSaver(restarted).aget_tuple(
+                {"configurable": {"thread_id": f"civicmesh:{first[1].id}"}}
+            )
+            assert persisted is not None
+        await application_engine.dispose()

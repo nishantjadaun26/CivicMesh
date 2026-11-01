@@ -7,8 +7,11 @@ from html.parser import HTMLParser
 from pathlib import Path
 from uuid import uuid4
 
+from httpx import HTTPError
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
+from backend.app.core.errors import AppError
 from backend.app.database.models import Authority, SourceChunk, SourceDocument, utc_now
 from backend.app.database.session import AsyncSessionLocal
 from backend.app.services.routing.official_sources import SafeFetcher
@@ -119,7 +122,7 @@ if __name__ == "__main__":
     else:
         try:
             asyncio.run(ingest(arguments))
-        except Exception as error:
+        except (OSError, ValueError, RuntimeError, AppError, SQLAlchemyError, HTTPError) as error:
             print(
                 f"Source ingestion failed ({type(error).__name__}); document and connection contents omitted."
             )
