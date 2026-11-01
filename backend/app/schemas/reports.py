@@ -10,6 +10,7 @@ from backend.app.schemas.common import (
     ConfirmedLocation,
     OptionalReportText,
 )
+from civicmesh_ai.integration import ReportCompletion
 from pydantic import Field, model_validator
 
 
@@ -56,7 +57,7 @@ class ReportResponse(BaseSchema):
     evidence_ids: list[UUID]
     status: str
     job_id: UUID | None
-    extraction_result: dict[str, Any] | None = None
+    extraction_result: ReportCompletion | None = None
     created_at: datetime
     updated_at: datetime
 

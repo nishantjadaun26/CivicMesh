@@ -2,10 +2,10 @@ name: Frontend module checks
 on:
   pull_request:
     branches: [main]
-    paths: ['frontend/**', '.github/workflows/frontend.yml']
+    paths: ['frontend/**', 'backend/**', 'contracts/**', '.github/workflows/frontend.yml']
   push:
-    branches: [feat/frontend]
-    paths: ['frontend/**', '.github/workflows/frontend.yml']
+    branches: [feat/frontend, feat/project-integration]
+    paths: ['frontend/**', 'backend/**', 'contracts/**', '.github/workflows/frontend.yml']
 permissions:
   contents: read
 jobs:
@@ -22,7 +22,18 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - name: Check generated API types
+        run: |
+          npm run api:generate
+          git diff --exit-code src/types/api.generated.ts
       - run: npm run typecheck
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm test
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.8.15'
+          python-version: '3.11'
+      - run: uv sync --project ../backend --frozen --extra dev
+      - run: npm run test:integration
+      - run: npm audit --audit-level=moderate

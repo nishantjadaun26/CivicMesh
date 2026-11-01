@@ -32,9 +32,10 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID"],
 )
 
 
@@ -44,8 +45,26 @@ async def request_id_middleware(request: Request, call_next):
     request_id = f"req-{uuid.uuid4().hex[:12]}"
     request.state.request_id = request_id
 
-    response = await call_next(request)
+    if request.method in {"POST", "PUT", "PATCH"}:
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > 65536:
+                return JSONResponse(status_code=413, headers={"X-Request-ID": request_id},
+                    content={"code": "request_too_large", "message": "JSON requests must not exceed 64 KiB.", "request_id": request_id})
+        request._body = bytes(body)
+
+    import asyncio
+    try:
+        async with asyncio.timeout(settings.REQUEST_TIMEOUT_SECONDS):
+            response = await call_next(request)
+    except TimeoutError:
+        response = JSONResponse(status_code=503, content={"code": "request_timeout",
+            "message": "Request timed out. Retry with the same idempotency key.", "request_id": request_id})
     response.headers["X-Request-ID"] = request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    if request.headers.get("authorization") or request.url.path.startswith(("/reports", "/jobs", "/uploads")):
+        response.headers["Cache-Control"] = "no-store"
     return response
 
 

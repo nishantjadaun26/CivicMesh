@@ -1,5 +1,7 @@
 """Authentication and authorization dependencies for Supabase JWT verification."""
 
+import asyncio
+from functools import lru_cache
 from typing import Annotated
 from uuid import UUID
 
@@ -16,6 +18,12 @@ from backend.app.database.session import get_db
 from fastapi import Depends, Header
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+@lru_cache(maxsize=4)
+def project_jwks(url: str):
+    """Cache only the configured project's public keys for at most five minutes."""
+    return jwt.PyJWKClient(url, lifespan=300, timeout=5)
 
 
 async def get_current_user_id(
@@ -37,17 +45,28 @@ async def get_current_user_id(
     token = parts[1]
     cfg = settings or get_settings()
 
-    if (not cfg.SUPABASE_JWT_SECRET or len(cfg.SUPABASE_JWT_SECRET.strip()) < 32
-            or any(value in cfg.SUPABASE_JWT_SECRET.lower() for value in PLACEHOLDERS)):
-        raise ServiceUnavailableError("Authentication is not configured.")
-
     try:
-        # Decode and verify Supabase JWT
-        # Supabase default tokens use HS256 with project JWT secret
+        header = jwt.get_unverified_header(token)
+        algorithm = header.get("alg")
+        if algorithm == "HS256":
+            if (not cfg.SUPABASE_JWT_SECRET or len(cfg.SUPABASE_JWT_SECRET.strip()) < 32
+                    or any(value in cfg.SUPABASE_JWT_SECRET.lower() for value in PLACEHOLDERS)):
+                raise ServiceUnavailableError("Legacy authentication is not configured.")
+            key = cfg.SUPABASE_JWT_SECRET
+        elif algorithm in ("ES256", "RS256"):
+            if not header.get("kid") or not cfg.SUPABASE_URL.startswith("https://"):
+                raise UnauthorizedError("Invalid authentication signing key")
+            client = project_jwks(f"{cfg.SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json")
+            signing_key = await asyncio.to_thread(client.get_signing_key_from_jwt, token)
+            if signing_key.algorithm_name != algorithm:
+                raise UnauthorizedError("Invalid authentication signing algorithm")
+            key = signing_key.key
+        else:
+            raise UnauthorizedError("Unsupported authentication signing algorithm")
         payload = jwt.decode(
             token,
-            cfg.SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
+            key,
+            algorithms=[algorithm],
             audience="authenticated",
             issuer=f"{cfg.SUPABASE_URL.rstrip('/')}/auth/v1",
             options={"require": ["exp", "sub", "aud", "iss"]},
@@ -60,10 +79,25 @@ async def get_current_user_id(
         return UUID(user_id_str)
     except jwt.ExpiredSignatureError:
         raise UnauthorizedError("Session expired. Please sign in again.") from None
+    except jwt.PyJWKClientConnectionError:
+        raise ServiceUnavailableError("Authentication key service is unavailable.") from None
+    except jwt.PyJWKClientError:
+        raise UnauthorizedError("Invalid authentication signing key") from None
     except jwt.InvalidTokenError:
         raise UnauthorizedError("Invalid authentication token") from None
     except ValueError:
         raise UnauthorizedError("Token 'sub' claim is not a valid UUID") from None
+
+
+async def require_write_user(
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> UUID:
+    """Database-shared fixed-window limit on authenticated mutations, across API replicas."""
+    from backend.app.services.jobs.limits import consume_write
+    await consume_write(db, user_id, settings.WRITE_REQUESTS_PER_HOUR)
+    return user_id
 
 
 async def require_report_owner(

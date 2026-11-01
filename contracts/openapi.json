@@ -6,6 +6,25 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/health/live": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Process liveness; no external calls",
+        "operationId": "liveness_health_live_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -14,6 +33,25 @@
         "summary": "Check service health and readiness",
         "description": "Reports API liveness, configuration validity, and database connectivity.",
         "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Database schema and recent initialized-worker readiness",
+        "operationId": "readiness_health_ready_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -122,7 +160,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 128
                 },
                 {
                   "type": "null"
@@ -201,6 +240,100 @@
           },
           "409": {
             "description": "Conflict with current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "List the authenticated citizen's private reports",
+        "operationId": "list_reports_reports_get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReportResponse"
+                  },
+                  "title": "Response List Reports Reports Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": {
@@ -502,6 +635,115 @@
         }
       }
     },
+    "/jobs/{job_id}/answers": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Answer clarification or review a private workflow",
+        "operationId": "answer_job_jobs__job_id__answers_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobAnswerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/incidents": {
       "get": {
         "tags": [
@@ -641,7 +883,7 @@
           "Incidents"
         ],
         "summary": "Submit citizen follow-up evidence",
-        "description": "Submit follow-up observation and evidence without altering official authority status.",
+        "description": "Store a private citizen observation and queue its AI assessment.",
         "operationId": "submit_follow_up_incidents__incident_id__follow_ups_post",
         "parameters": [
           {
@@ -652,6 +894,23 @@
               "type": "string",
               "format": "uuid",
               "title": "Incident Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
             }
           },
           {
@@ -734,10 +993,195 @@
           }
         }
       }
+    },
+    "/incidents/{incident_id}/follow-ups/{follow_up_id}": {
+      "get": {
+        "tags": [
+          "Incidents"
+        ],
+        "summary": "Read the authenticated citizen's private follow-up",
+        "operationId": "get_follow_up_incidents__incident_id__follow_ups__follow_up_id__get",
+        "parameters": [
+          {
+            "name": "incident_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Incident Id"
+            }
+          },
+          {
+            "name": "follow_up_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Follow Up Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowUpResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AuthorityRecommendation": {
+        "properties": {
+          "authority_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Authority Id"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Source Ids"
+          },
+          "rationale": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Rationale"
+          },
+          "uncertainties": {
+            "items": {
+              "type": "string",
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Uncertainties"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "rationale"
+        ],
+        "title": "AuthorityRecommendation",
+        "description": "A recommendation must cite only supplied, backend-verified source passages."
+      },
+      "Clarification": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Text",
+            "default": ""
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "garbage",
+                  "water_leak"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/civicmesh_ai__schemas__ConfirmedLocation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Clarification"
+      },
       "ClarificationAnswerRequest": {
         "properties": {
           "checkpoint_id": {
@@ -774,7 +1218,7 @@
           "location": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ConfirmedLocation"
+                "$ref": "#/components/schemas/backend__app__schemas__common__ConfirmedLocation"
               },
               {
                 "type": "null"
@@ -791,27 +1235,156 @@
         "title": "ClarificationAnswerRequest",
         "description": "Citizen answer to a workflow clarification request."
       },
-      "ConfirmedLocation": {
+      "ComplaintContent": {
+        "properties": {
+          "subject": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Subject"
+          },
+          "observations": {
+            "items": {
+              "type": "string",
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Observations"
+          },
+          "requested_action": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Requested Action"
+          },
+          "source_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Source Ids"
+          },
+          "limitations": {
+            "items": {
+              "type": "string",
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Limitations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "subject",
+          "observations",
+          "requested_action",
+          "source_ids"
+        ],
+        "title": "ComplaintContent",
+        "description": "Model-authored draft content; trusted recipient and evidence are attached by code."
+      },
+      "ComplaintPacket": {
+        "properties": {
+          "report_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Report Id"
+          },
+          "authority_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Authority Id"
+          },
+          "authority_name": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Authority Name"
+          },
+          "jurisdiction": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Jurisdiction"
+          },
+          "location": {
+            "$ref": "#/components/schemas/ConfirmedLocation-Output"
+          },
+          "content": {
+            "$ref": "#/components/schemas/ComplaintContent"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/OfficialSource"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Sources"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Evidence Ids"
+          },
+          "authority_status": {
+            "type": "string",
+            "const": "unknown",
+            "title": "Authority Status"
+          },
+          "submitted": {
+            "type": "boolean",
+            "const": false,
+            "title": "Submitted"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "report_id",
+          "authority_id",
+          "authority_name",
+          "jurisdiction",
+          "location",
+          "content",
+          "sources",
+          "authority_status",
+          "submitted"
+        ],
+        "title": "ComplaintPacket",
+        "description": "A private unsubmitted draft assembled from validated observations and sources."
+      },
+      "ConfirmedLocation-Output": {
         "properties": {
           "latitude": {
             "type": "number",
             "maximum": 90.0,
             "minimum": -90.0,
-            "title": "Latitude",
-            "description": "WGS84 latitude"
+            "title": "Latitude"
           },
           "longitude": {
             "type": "number",
             "maximum": 180.0,
             "minimum": -180.0,
-            "title": "Longitude",
-            "description": "WGS84 longitude"
+            "title": "Longitude"
           },
           "confirmed": {
             "type": "boolean",
             "const": true,
-            "title": "Confirmed",
-            "description": "Explicit manual confirmation flag"
+            "title": "Confirmed"
           }
         },
         "additionalProperties": false,
@@ -821,8 +1394,247 @@
           "longitude",
           "confirmed"
         ],
-        "title": "ConfirmedLocation",
-        "description": "Explicit coordinate values confirmed by citizen."
+        "title": "ConfirmedLocation"
+      },
+      "Extraction": {
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "garbage",
+                  "water_leak"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "hi",
+                  "en",
+                  "mixed",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "location_description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Description"
+          },
+          "uncertainties": {
+            "items": {
+              "type": "string",
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Uncertainties"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Extraction",
+        "description": "Untrusted model observations. No identity, coordinates or authority status fields."
+      },
+      "ExtractionResult": {
+        "properties": {
+          "report_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Report Id"
+          },
+          "extraction": {
+            "$ref": "#/components/schemas/Extraction"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "garbage",
+                  "water_leak"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConfirmedLocation-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready_for_backend",
+              "needs_information",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "missing_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing Fields"
+          },
+          "authority_status": {
+            "type": "string",
+            "const": "unknown",
+            "title": "Authority Status",
+            "default": "unknown"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "report_id",
+          "extraction",
+          "category",
+          "location",
+          "status",
+          "missing_fields"
+        ],
+        "title": "ExtractionResult"
+      },
+      "FollowUpAssessment": {
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "appears_resolved",
+              "partly_resolved",
+              "persists",
+              "insufficient_evidence"
+            ],
+            "title": "Outcome"
+          },
+          "rationale": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Rationale"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Evidence Ids"
+          },
+          "limitations": {
+            "items": {
+              "type": "string",
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Limitations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "outcome",
+          "rationale"
+        ],
+        "title": "FollowUpAssessment",
+        "description": "An attributed AI observation, never an official resolution update."
+      },
+      "FollowUpCompletion": {
+        "properties": {
+          "incident_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Incident Id"
+          },
+          "assessment": {
+            "$ref": "#/components/schemas/FollowUpAssessment"
+          },
+          "attribution": {
+            "type": "string",
+            "const": "ai_assessment",
+            "title": "Attribution"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Observed At"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "reviewed_observation",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "updates_authority_status": {
+            "type": "boolean",
+            "const": false,
+            "title": "Updates Authority Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "incident_id",
+          "assessment",
+          "attribution",
+          "observed_at",
+          "status",
+          "updates_authority_status"
+        ],
+        "title": "FollowUpCompletion",
+        "description": "Reviewed citizen-evidence assessment with no authority-status side effect."
       },
       "FollowUpCreateRequest": {
         "properties": {
@@ -871,6 +1683,23 @@
             "type": "string",
             "title": "Status"
           },
+          "job_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Id"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -883,9 +1712,54 @@
           "id",
           "incident_id",
           "status",
+          "job_id",
           "created_at"
         ],
         "title": "FollowUpResponse"
+      },
+      "IncidentCandidate": {
+        "properties": {
+          "incident_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Incident Id"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "garbage",
+              "water_leak"
+            ],
+            "title": "Category"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "distance_meters": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance Meters"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "incident_id",
+          "category",
+          "reason"
+        ],
+        "title": "IncidentCandidate",
+        "description": "Backend-filtered candidate; AI does not merge reports or decide membership."
       },
       "IncidentDetailResponse": {
         "properties": {
@@ -1022,6 +1896,41 @@
         "title": "IncidentPublicResponse",
         "description": "Approved public incident projection. Omits private citizen details."
       },
+      "JobAnswerRequest": {
+        "properties": {
+          "checkpoint_id": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Checkpoint Id"
+          },
+          "interrupt_id": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Interrupt Id"
+          },
+          "reply": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Clarification"
+              },
+              {
+                "$ref": "#/components/schemas/ReviewDecision"
+              }
+            ],
+            "title": "Reply"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "checkpoint_id",
+          "interrupt_id",
+          "reply"
+        ],
+        "title": "JobAnswerRequest"
+      },
       "JobResponse": {
         "properties": {
           "job_id": {
@@ -1030,9 +1939,28 @@
             "title": "Job Id"
           },
           "report_id": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Report Id"
+          },
+          "follow_up_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Follow Up Id"
           },
           "status": {
             "type": "string",
@@ -1048,6 +1976,11 @@
           "attempts": {
             "type": "integer",
             "title": "Attempts",
+            "default": 0
+          },
+          "failures": {
+            "type": "integer",
+            "title": "Failures",
             "default": 0
           },
           "max_attempts": {
@@ -1098,6 +2031,20 @@
               }
             ]
           },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportCompletion"
+              },
+              {
+                "$ref": "#/components/schemas/FollowUpCompletion"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -1119,6 +2066,69 @@
           "updated_at"
         ],
         "title": "JobResponse"
+      },
+      "OfficialSource": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "authority_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Authority Id"
+          },
+          "authority_name": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Authority Name"
+          },
+          "jurisdiction": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Jurisdiction"
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 2083,
+            "minLength": 1,
+            "format": "uri",
+            "title": "Url"
+          },
+          "retrieved_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Retrieved At"
+          },
+          "verified_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Verified At"
+          },
+          "supporting_passage": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Supporting Passage"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "document_id",
+          "authority_id",
+          "authority_name",
+          "jurisdiction",
+          "url",
+          "retrieved_at",
+          "verified_at",
+          "supporting_passage"
+        ],
+        "title": "OfficialSource",
+        "description": "A backend-verified source passage, with immutable provenance metadata."
       },
       "PendingAction": {
         "properties": {
@@ -1144,6 +2154,118 @@
           "prompt"
         ],
         "title": "PendingAction"
+      },
+      "PriorityAssessment": {
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Level"
+          },
+          "rationale": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Rationale"
+          },
+          "supporting_observations": {
+            "items": {
+              "type": "string",
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Supporting Observations"
+          },
+          "uncertainties": {
+            "items": {
+              "type": "string",
+              "maxLength": 2000,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Uncertainties"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "level",
+          "rationale"
+        ],
+        "title": "PriorityAssessment",
+        "description": "Advisory triage, not a verified emergency or official authority priority."
+      },
+      "ReportCompletion": {
+        "properties": {
+          "extraction_result": {
+            "$ref": "#/components/schemas/ExtractionResult"
+          },
+          "workflow_status": {
+            "type": "string",
+            "enum": [
+              "approved_draft",
+              "rejected_draft",
+              "authority_unavailable",
+              "needs_information",
+              "rejected"
+            ],
+            "title": "Workflow Status"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/IncidentCandidate"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Candidates"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriorityAssessment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recommendation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AuthorityRecommendation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "packet": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ComplaintPacket"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "extraction_result",
+          "workflow_status"
+        ],
+        "title": "ReportCompletion",
+        "description": "Completed AI result for owner-authorized persistence, never a submission receipt."
       },
       "ReportCreateRequest": {
         "properties": {
@@ -1180,7 +2302,7 @@
           "location": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ConfirmedLocation"
+                "$ref": "#/components/schemas/backend__app__schemas__common__ConfirmedLocation"
               },
               {
                 "type": "null"
@@ -1278,14 +2400,12 @@
           "extraction_result": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/ReportCompletion"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Extraction Result"
+            ]
           },
           "created_at": {
             "type": "string",
@@ -1315,6 +2435,20 @@
         ],
         "title": "ReportResponse",
         "description": "Authenticated citizen report response."
+      },
+      "ReviewDecision": {
+        "properties": {
+          "approved": {
+            "type": "boolean",
+            "title": "Approved"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "approved"
+        ],
+        "title": "ReviewDecision"
       },
       "StatusEventResponse": {
         "properties": {
@@ -1406,6 +2540,68 @@
           "storage_path"
         ],
         "title": "UploadPrepareResponse"
+      },
+      "backend__app__schemas__common__ConfirmedLocation": {
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Latitude",
+            "description": "WGS84 latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Longitude",
+            "description": "WGS84 longitude"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "const": true,
+            "title": "Confirmed",
+            "description": "Explicit manual confirmation flag"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "latitude",
+          "longitude",
+          "confirmed"
+        ],
+        "title": "ConfirmedLocation",
+        "description": "Explicit coordinate values confirmed by citizen."
+      },
+      "civicmesh_ai__schemas__ConfirmedLocation": {
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Longitude"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "const": true,
+            "title": "Confirmed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "latitude",
+          "longitude",
+          "confirmed"
+        ],
+        "title": "ConfirmedLocation"
       },
       "ErrorResponse": {
         "description": "Consistent error payload across all endpoints.",

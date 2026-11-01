@@ -33,6 +33,9 @@ TestingSessionLocal = async_sessionmaker(
 def get_test_settings() -> Settings:
     return Settings(
         ENVIRONMENT="test",
+        PILOT_LOCALITY_NAME="Isolated test jurisdiction",
+        PILOT_LATITUDE=1,
+        PILOT_LONGITUDE=2,
         SUPABASE_JWT_SECRET="test-jwt-secret-key-32-chars-minimum-length!",
         DATABASE_URL=TEST_DATABASE_URL,
     )

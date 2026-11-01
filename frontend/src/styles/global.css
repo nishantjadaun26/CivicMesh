@@ -20,3 +20,7 @@
 @media(max-width:650px){.screen{padding:24px 18px}.panel{padding:19px}.steps{gap:0;justify-content:space-between}.steps li{font-size:12px;padding:10px 8px}.campaign-card{grid-template-columns:1fr}.campaign-art{height:100px;flex-direction:row;border-radius:0}.campaign-art .category-icon svg{width:44px;height:44px}.campaign-card-body{padding:19px}.stats-strip{grid-template-columns:repeat(3,1fr);row-gap:20px}.report-link{flex-wrap:wrap}.report-link .status-badge{margin-left:30px}.profile-identity{gap:13px}.profile-avatar{width:60px;height:60px;flex-shrink:0}.profile-identity h2{font-size:20px}.location-picker{height:300px}.field-row{gap:10px}.evidence-gallery{grid-template-columns:1fr}.screen .page-heading{align-items:flex-start}.screen .page-heading .demo-label{display:none}}
 /* Keep functional map controls at the same accessible target size as app controls. */
 .location-picker .leaflet-control-zoom a{width:44px;height:44px;line-height:44px}.campaign-art>.evidence-image{height:100%;max-height:none;margin:0;object-fit:cover}.stats-strip>div:last-child:nth-child(odd){grid-column:auto}.report-link:focus-visible{outline-offset:0}
+.workflow-data { max-width: 100%; overflow-wrap: anywhere; padding: 8px 0; }
+.workflow-data > div { padding: 8px; border-bottom: 1px solid var(--edge); }
+.workflow-data dt { text-transform: capitalize; font-weight: 800; }
+.workflow-data dd { margin: 4px 0 0; }

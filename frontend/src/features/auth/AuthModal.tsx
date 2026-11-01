@@ -194,12 +194,13 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               className="primary-button"
               style={{ width: '100%' }}
               onClick={async () => {
-                await signOut();
-                onClose();
+                try { await signOut(); onClose(); }
+                catch (error) { setError(error instanceof Error ? error.message : 'Sign-out could not complete.'); }
               }}
             >
               Sign out
             </button>
+            {error && <p role="alert">{error}</p>}
           </div>
         ) : (
           <form onSubmit={handleSubmit}>

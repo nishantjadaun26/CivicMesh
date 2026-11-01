@@ -66,10 +66,6 @@ export function VoiceRecorder({ value, onChange }: VoiceRecorderProps) {
         if (!alive.current) return;
         const blob = new Blob(chunks, { type: r.mimeType || 'audio/webm' });
         onChange(blob);
-        if (!value) {
-          setUrl(URL.createObjectURL(blob));
-          setFileName('Recorded audio note');
-        }
         setRecording(false);
       };
       r.start();
@@ -87,26 +83,22 @@ export function VoiceRecorder({ value, onChange }: VoiceRecorderProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate audio size (max 15MB)
-    if (file.size > 15 * 1024 * 1024) {
-      setError('Audio file must be smaller than 15 MB.');
+    // Validate audio size (max 10 MiB)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Audio file must be smaller than 10 MiB.');
       e.target.value = '';
       return;
     }
 
     // Validate audio type
-    const validTypes = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/x-m4a', 'audio/webm', 'audio/ogg', 'audio/aac'];
-    if (!file.type.startsWith('audio/') && !validTypes.includes(file.type)) {
+    const validTypes = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/webm', 'audio/ogg'];
+    if (!validTypes.includes(file.type.split(';')[0].trim())) {
       setError('Please choose a valid audio file (.mp3, .wav, .m4a, .webm, .ogg).');
       e.target.value = '';
       return;
     }
 
     onChange(file);
-    if (!value) {
-      setUrl(URL.createObjectURL(file));
-      setFileName(file.name);
-    }
   }
 
   function clearAudio() {

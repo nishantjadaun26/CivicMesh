@@ -4,7 +4,7 @@ import asyncio
 import ipaddress
 import socket
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 import httpx
@@ -124,8 +124,8 @@ class OfficialSourcePassage:
         self.authority_name = authority_name
         self.jurisdiction = jurisdiction
         self.url = url
-        self.retrieved_at = retrieved_at
-        self.verified_at = verified_at
+        self.retrieved_at = retrieved_at if retrieved_at.tzinfo else retrieved_at.replace(tzinfo=timezone.utc)
+        self.verified_at = verified_at if verified_at.tzinfo else verified_at.replace(tzinfo=timezone.utc)
         self.supporting_passage = supporting_passage
 
     def to_dict(self) -> dict:
@@ -151,17 +151,30 @@ class OfficialSourceService:
         location: ConfirmedLocation,
         db: AsyncSession,
         limit: int = 10,
+        pilot_locality_name: str | None = None,
+        pilot_latitude: float | None = None,
+        pilot_longitude: float | None = None,
+        pilot_radius_meters: float | None = None,
     ) -> list[OfficialSourcePassage]:
         """Retrieve verified authority document passages relevant to the report."""
-        if not settings.PILOT_LOCALITY_NAME.strip():
+        locality = settings.PILOT_LOCALITY_NAME if pilot_locality_name is None else pilot_locality_name
+        if not locality.strip():
             raise ServiceUnavailableError("Pilot locality is not configured.")
+        from backend.app.services.matching.incident_matcher import haversine_distance_meters
+        center_lat = settings.PILOT_LATITUDE if pilot_latitude is None else pilot_latitude
+        center_lon = settings.PILOT_LONGITUDE if pilot_longitude is None else pilot_longitude
+        radius = settings.PILOT_RADIUS_METERS if pilot_radius_meters is None else pilot_radius_meters
+        if center_lat is None or center_lon is None:
+            return []  # A locality name alone cannot establish geographic jurisdiction.
+        if haversine_distance_meters(location.latitude, location.longitude, center_lat, center_lon) > radius:
+            return []
         category_term = "garbage" if category == "garbage" else "water"
         stmt = (
             select(SourceChunk, SourceDocument, Authority)
             .join(SourceDocument, SourceChunk.document_id == SourceDocument.id)
             .join(Authority, SourceDocument.authority_id == Authority.id)
             .where(
-                Authority.jurisdiction == settings.PILOT_LOCALITY_NAME
+                Authority.jurisdiction == locality
             )
             .where(
                 SourceDocument.title.ilike(f"%{category_term}%")

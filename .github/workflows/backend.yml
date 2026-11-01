@@ -2,10 +2,10 @@ name: Backend module checks
 on:
   pull_request:
     branches: [main]
-    paths: ['backend/**', 'contracts/**', 'supabase/**', '.github/workflows/backend.yml']
+    paths: ['backend/**', 'contracts/**', 'supabase/**', 'scripts/**', 'Dockerfile', '.dockerignore', '.github/workflows/backend.yml']
   push:
-    branches: [feat/backend]
-    paths: ['backend/**', 'contracts/**', 'supabase/**', '.github/workflows/backend.yml']
+    branches: [feat/backend, feat/project-integration]
+    paths: ['backend/**', 'contracts/**', 'supabase/**', 'scripts/**', 'Dockerfile', '.dockerignore', '.github/workflows/backend.yml']
 permissions:
   contents: read
 jobs:
@@ -19,15 +19,45 @@ jobs:
         with:
           version: '0.8.15'
           python-version: '3.11'
-      - name: Install dependencies
-        run: |
-          uv venv .venv
-          uv pip install --python .venv/bin/python -e "./backend[dev]" greenlet aiosqlite ruff
+      - name: Install locked backend and local AI dependencies
+        run: uv sync --project backend --frozen --extra dev
       - name: Lint with ruff
-        run: .venv/bin/ruff check backend scripts
+        run: backend/.venv/bin/ruff check backend scripts
       - name: Run test suite
-        run: .venv/bin/pytest -v backend/tests
+        run: backend/.venv/bin/pytest -q backend/tests backend/app/ai/tests
+      - name: Parse migration SQL
+        run: backend/.venv/bin/python scripts/validate_migrations.py
       - name: Verify OpenAPI contract export
         run: |
-          .venv/bin/python scripts/export_openapi.py
+          backend/.venv/bin/python scripts/export_openapi.py
           git diff --exit-code contracts/openapi.json
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      database:
+        image: supabase/postgres:17.6.1.136
+        env:
+          POSTGRES_PASSWORD: isolated-ci-password
+          POSTGRES_DB: civicmesh_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -h localhost"
+          --health-interval 10s --health-timeout 5s --health-retries 12
+    env:
+      ENVIRONMENT: test
+      CIVICMESH_TEST_POSTGRES_URL: postgresql://postgres:isolated-ci-password@127.0.0.1:5432/civicmesh_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.8.15'
+          python-version: '3.11'
+      - run: uv sync --project backend --frozen --extra dev
+      - run: backend/.venv/bin/pytest -q backend/tests/test_postgres_integration.py
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t civicmesh-check .
+      - name: Verify packaged backend, AI and binary PostgreSQL driver
+        run: docker run --rm --entrypoint python civicmesh-check -c "import backend.app.main; import civicmesh_ai; import psycopg; import importlib.util; assert importlib.util.find_spec('backend.tests') is None"

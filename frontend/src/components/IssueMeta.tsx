@@ -2,15 +2,8 @@ import type { Category, IssueStatus } from '../types/civic';
 import { Icon, type IconName } from './Icon';
 
 export const categoryIcons: Record<Category, IconName> = {
-  Roads: 'road',
   'Garbage accumulation': 'waste',
   'Water leak': 'water',
-  Waste: 'waste',
-  Water: 'water',
-  Lighting: 'light',
-  Drainage: 'drain',
-  Infrastructure: 'road',
-  Other: 'pin',
 };
 
 export function CategoryIcon({ category }: { category: Category }) {

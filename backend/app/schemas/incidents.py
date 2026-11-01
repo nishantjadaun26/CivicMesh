@@ -52,4 +52,6 @@ class FollowUpResponse(BaseSchema):
     id: UUID
     incident_id: UUID
     status: str
+    job_id: UUID
+    result: dict[str, Any] | None = None
     created_at: datetime

@@ -1,11 +1,11 @@
 """Approved public incident listing, detail views, and follow-up submissions."""
 
 from typing import Annotated
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from backend.app.api.dependencies.auth import get_current_user_id
+from backend.app.api.dependencies.auth import get_current_user_id, require_write_user
 from backend.app.core.errors import NotFoundError
-from backend.app.database.models import Incident, StatusEvent
+from backend.app.database.models import FollowUp, Incident, Job, StatusEvent
 from backend.app.database.session import get_db
 from backend.app.schemas.incidents import (
     FollowUpCreateRequest,
@@ -14,8 +14,8 @@ from backend.app.schemas.incidents import (
     IncidentPublicResponse,
     StatusEventResponse,
 )
-from backend.app.services.storage.media import StorageService
-from fastapi import APIRouter, Depends, Query
+from backend.app.services.incidents.follow_ups import create_follow_up
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -139,46 +139,28 @@ async def get_incident_detail(
 async def submit_follow_up(
     incident_id: UUID,
     request: FollowUpCreateRequest,
+    user_id: Annotated[UUID, Depends(require_write_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=128)] = None,
+) -> FollowUpResponse:
+    """Store a private citizen observation and queue its AI assessment."""
+    item, job = await create_follow_up(db, incident_id, user_id, request, idempotency_key)
+    return FollowUpResponse(id=item.id, incident_id=item.incident_id, status=item.status,
+                            created_at=item.created_at, job_id=job.id, result=item.result)
+
+
+@router.get("/{incident_id}/follow-ups/{follow_up_id}", response_model=FollowUpResponse,
+            summary="Read the authenticated citizen's private follow-up")
+async def get_follow_up(
+    incident_id: UUID,
+    follow_up_id: UUID,
     user_id: Annotated[UUID, Depends(get_current_user_id)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> FollowUpResponse:
-    """Submit follow-up observation and evidence without altering official authority status."""
-    stmt = select(Incident).where(Incident.id == incident_id)
-    res = await db.execute(stmt)
-    inc = res.scalar_one_or_none()
-    if not inc or not inc.is_public:
-        raise NotFoundError("Incident not found")
-
-    # Bind follow-up evidence to this incident
-    if request.evidence_ids:
-        await StorageService.verify_and_bind_evidence(
-            owner_id=user_id,
-            evidence_ids=request.evidence_ids,
-            db=db,
-            incident_id=incident_id,
-        )
-
-    follow_up_id = uuid4()
-    # Record citizen observation status event (evidence binding & event commit together)
-    payload = {
-        "description": request.text,
-        "same_location_confirmed": request.same_location_confirmed,
-    }
-    if request.evidence_ids:
-        payload["_evidence_ids"] = [str(eid) for eid in request.evidence_ids]
-
-    event = StatusEvent(
-        id=follow_up_id,
-        incident_id=incident_id,
-        event_type="citizen_observation",
-        payload=payload,
-    )
-    db.add(event)
-    await db.commit()
-
-    return FollowUpResponse(
-        id=follow_up_id,
-        incident_id=incident_id,
-        status="recorded",
-        created_at=event.created_at,
-    )
+):
+    item = (await db.execute(select(FollowUp).where(FollowUp.id == follow_up_id,
+                            FollowUp.incident_id == incident_id, FollowUp.owner_id == user_id))).scalar_one_or_none()
+    if item is None:
+        raise NotFoundError("Follow-up not found")
+    job = (await db.execute(select(Job).where(Job.follow_up_id == item.id))).scalar_one()
+    return FollowUpResponse(id=item.id, incident_id=item.incident_id, status=item.status,
+                            created_at=item.created_at, job_id=job.id, result=item.result)

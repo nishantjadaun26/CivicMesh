@@ -1,13 +1,21 @@
 """Liveness and readiness health endpoints."""
 
+from datetime import timedelta
+
 from backend.app.core.config import Settings, get_settings
+from backend.app.database.models import Job, WorkerHeartbeat, utc_now
 from backend.app.database.session import get_db
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(tags=["Health"])
+
+
+@router.get("/health/live", summary="Process liveness; no external calls")
+async def liveness():
+    return {"live": True}
 
 
 @router.get(
@@ -40,7 +48,12 @@ async def health_check(
 
     try:
         await db.execute(text("SELECT 1"))
+        await db.execute(select(Job).limit(0))
         details["database"] = "connected"
+        fresh_worker = (await db.execute(select(WorkerHeartbeat.worker_id).where(
+            WorkerHeartbeat.last_seen > utc_now() - timedelta(seconds=45)
+        ).limit(1))).scalar_one_or_none()
+        details["worker"] = "recent_heartbeat" if fresh_worker else "unavailable"
     except Exception:
         details["database"] = "unreachable"
         return JSONResponse(
@@ -56,6 +69,18 @@ async def health_check(
     return {
         "status": "healthy",
         "live": True,
-        "ready": False,  # Worker/checkpoint integration is not operational yet.
+        "ready": bool(fresh_worker) and (settings.ENVIRONMENT != "production" or settings.is_configured_for_production()),
         "details": details,
     }
+
+
+@router.get("/health/ready", summary="Database schema and recent initialized-worker readiness")
+async def readiness(request: Request, settings: Settings = Depends(get_settings), db: AsyncSession = Depends(get_db)):
+    result = await health_check(request, settings, db)
+    if isinstance(result, JSONResponse):
+        return result
+    if not result["ready"]:
+        return JSONResponse(status_code=503, content={"code": "service_unavailable",
+            "message": "No recently initialized worker is available.",
+            "request_id": request.state.request_id, "details": result["details"]})
+    return result

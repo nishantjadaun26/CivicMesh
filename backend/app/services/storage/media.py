@@ -12,7 +12,7 @@ from backend.app.core.errors import (
     ServiceUnavailableError,
     ValidationError,
 )
-from backend.app.database.models import Evidence
+from backend.app.database.models import Evidence, Profile
 from backend.app.schemas.uploads import (
     ALLOWED_MIME_TYPES,
     MAX_AUDIO_SIZE_BYTES,
@@ -84,6 +84,14 @@ class StorageService:
         except (httpx.HTTPError, ValueError, KeyError, TypeError):
             raise ServiceUnavailableError("Private storage could not prepare an upload.") from None
 
+        if await db.get(Profile, owner_id) is None:
+            from sqlalchemy.exc import IntegrityError
+            try:
+                async with db.begin_nested():
+                    db.add(Profile(id=owner_id))
+                    await db.flush()
+            except IntegrityError:
+                pass
         evidence = Evidence(id=evidence_id, owner_id=owner_id,
             storage_bucket=settings.STORAGE_EVIDENCE_BUCKET, storage_path=storage_path,
             mime_type=request.content_type, file_size_bytes=request.file_size_bytes, verified=False)
@@ -93,7 +101,7 @@ class StorageService:
             storage_path=storage_path, expires_in_seconds=7200)
 
     @staticmethod
-    async def verify_uploaded_object(item: Evidence) -> None:
+    async def verify_uploaded_object(item: Evidence) -> bytes:
         """Verify actual bounded object bytes before marking owner media as bindable."""
         key = settings.SUPABASE_SERVICE_ROLE_KEY
         if not key or any(value in key.lower() for value in PLACEHOLDERS):
@@ -136,6 +144,7 @@ class StorageService:
         if item.sha256_hash and item.sha256_hash != digest:
             raise ValidationError("Stored evidence changed after verification.")
         item.sha256_hash, item.verified = digest, True
+        return content
 
     @staticmethod
     async def verify_and_bind_evidence(
@@ -144,6 +153,7 @@ class StorageService:
         db: AsyncSession,
         report_id: UUID | None = None,
         incident_id: UUID | None = None,
+        follow_up_id: UUID | None = None,
     ) -> list[Evidence]:
         """Verify ownership and bind evidence items to report and/or incident.
 
@@ -173,6 +183,8 @@ class StorageService:
                 raise ValidationError(f"Evidence item {item.id} is already bound to report {item.report_id}.")
             if incident_id is not None and item.incident_id is not None and item.incident_id != incident_id:
                 raise ValidationError(f"Evidence item {item.id} is already bound to incident {item.incident_id}.")
+            if follow_up_id is not None and (item.report_id is not None or item.follow_up_id is not None):
+                raise ValidationError("Follow-up evidence must be a fresh upload.")
 
             await StorageService.verify_uploaded_object(item)
 
@@ -180,6 +192,11 @@ class StorageService:
                 item.report_id = report_id
             if incident_id is not None:
                 item.incident_id = incident_id
+            if follow_up_id is not None:
+                item.follow_up_id = follow_up_id
+
+        if sum(item.file_size_bytes for item in items) > 12 * 1024 * 1024:
+            raise ValidationError("Combined AI evidence must not exceed 12 MiB.")
 
         # Flush to register bindings in session without prematurely committing caller's transaction
         await db.flush()

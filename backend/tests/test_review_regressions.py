@@ -27,7 +27,7 @@ async def test_reject_invalid_token_claims(client, changes):
 
 async def test_placeholder_signing_secret_never_authenticates(client):
     app.dependency_overrides[get_settings] = lambda: Settings()
-    token = jwt.encode({"sub": str(uuid4()), "aud": "authenticated"}, Settings().SUPABASE_JWT_SECRET, algorithm="HS256")
+    token = jwt.encode({"sub": str(uuid4()), "aud": "authenticated"}, "dev-supabase-jwt-secret-placeholder", algorithm="HS256")
     response = await client.get(f"/jobs/{uuid4()}", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 503
 

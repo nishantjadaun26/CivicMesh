@@ -1,0 +1,15 @@
+.git
+.cache
+**/.venv
+**/__pycache__
+**/*.egg-info
+**/.env
+**/.env.*
+**/*.sqlite*
+**/tests
+**/private-inputs
+**/test-results
+**/playwright-report
+frontend
+node_modules
+*.log
