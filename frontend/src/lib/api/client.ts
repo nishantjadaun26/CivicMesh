@@ -22,6 +22,7 @@ export async function request<T>(path: string, options: RequestInit = {}, authen
     const error = body as { message?: string; request_id?: string } | null;
     throw new Error(`${error?.message ?? `Service request failed (${response.status}).`}${error?.request_id ? ` Reference: ${error.request_id}` : ''}`);
   }
+  if (response.status === 204) return undefined as T;
   if (body === null) throw new Error('The service returned an invalid response.');
   return body as T;
 }
@@ -48,5 +49,8 @@ export const reportApi = {
   job: (id: string, signal?: AbortSignal) => request<ApiJob>(`/jobs/${encodeURIComponent(id)}`, { signal }, true),
   answer: (id: string, reply: JobReply) => request<ApiJob>(`/jobs/${encodeURIComponent(id)}/answers`, {
     method: 'POST', body: JSON.stringify(reply),
+  }, true),
+  removeMapSharing: (id: string) => request<void>(`/reports/${encodeURIComponent(id)}/map-sharing`, {
+    method: 'DELETE',
   }, true),
 };

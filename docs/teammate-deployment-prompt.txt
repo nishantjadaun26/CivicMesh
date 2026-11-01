@@ -56,7 +56,9 @@ Use the repository's implemented React/Vite frontend; do not assume Next.js.
    official authority passages for the real pilot, using the runbook's owner-run
    ingestion process. Do not invent sources, reports, authority responses or metrics.
    Missing sources must remain unavailable. Campaigns/support/rewards, automatic
-   public incident publication and external complaint submission are not implemented.
+   external complaint submission is not implemented. Reports enter the public
+   map only when the submitter explicitly opts in; show their status as unverified
+   and never expose reporter identity or uploaded evidence.
 
 6. Perform real staging smoke tests with a genuine, non-sensitive observation:
    sign-in/out; private upload; idempotent report creation; actual worker/model

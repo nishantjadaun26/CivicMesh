@@ -1,7 +1,7 @@
 import type { components } from './api.generated';
 export const categories = ['Garbage accumulation', 'Water leak'] as const;
 export type Category = typeof categories[number];
-export type IssueStatus = 'Published observation';
+export type IssueStatus = 'Community report · unverified' | 'Published observation';
 export interface Coordinates { lat: number; lng: number; }
 export interface Issue {
   id: string; title: string; description: string; category: Category; status: IssueStatus;

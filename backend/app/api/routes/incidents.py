@@ -1,11 +1,11 @@
-"""Approved public incident listing, detail views, and follow-up submissions."""
+"""Public incident listing, detail views, and follow-up submissions."""
 
 from typing import Annotated
 from uuid import UUID
 
 from backend.app.api.dependencies.auth import get_current_user_id, require_write_user
 from backend.app.core.errors import NotFoundError
-from backend.app.database.models import FollowUp, Incident, Job, StatusEvent
+from backend.app.database.models import FollowUp, Incident, IncidentReport, Job, StatusEvent
 from backend.app.database.session import get_db
 from backend.app.schemas.incidents import (
     FollowUpCreateRequest,
@@ -25,8 +25,8 @@ router = APIRouter(prefix="/incidents", tags=["Incidents"])
 @router.get(
     "",
     response_model=list[IncidentPublicResponse],
-    summary="List approved public incidents",
-    description="Returns public projections of verified community incidents. Omits private citizen details.",
+    summary="List public incidents",
+    description="Returns public projections, including citizen reports explicitly shared to the map. Omits private citizen identity and evidence.",
 )
 async def list_public_incidents(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -34,7 +34,7 @@ async def list_public_incidents(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
 ) -> list[IncidentPublicResponse]:
-    """Retrieve approved public incidents for map and listing screens."""
+    """Retrieve public incident projections for map and listing screens."""
     stmt = select(Incident).where(Incident.is_public == True)  # noqa: E712
     if category:
         stmt = stmt.where(Incident.category == category)
@@ -42,6 +42,13 @@ async def list_public_incidents(
 
     result = await db.execute(stmt)
     incidents = result.scalars().all()
+    community_incidents = set((await db.execute(
+        select(IncidentReport.incident_id)
+        .where(
+            IncidentReport.is_active.is_(True),
+            IncidentReport.incident_id.in_([incident.id for incident in incidents]),
+        )
+    )).scalars().all()) if incidents else set()
 
     return [
         IncidentPublicResponse(
@@ -51,6 +58,7 @@ async def list_public_incidents(
             longitude=inc.longitude,
             observed_condition=inc.observed_condition,
             authority_status=inc.authority_status,
+            community_report=inc.id in community_incidents,
             is_public=inc.is_public,
             created_at=inc.created_at,
             updated_at=inc.updated_at,
@@ -74,6 +82,12 @@ async def get_incident_detail(
     inc = res.scalar_one_or_none()
     if not inc:
         raise NotFoundError("Public incident not found")
+
+    community_report = (await db.execute(
+        select(IncidentReport.id)
+        .where(IncidentReport.incident_id == incident_id, IncidentReport.is_active.is_(True))
+        .limit(1)
+    )).scalar_one_or_none() is not None
 
     events_stmt = (
         select(StatusEvent)
@@ -123,6 +137,7 @@ async def get_incident_detail(
         longitude=inc.longitude,
         observed_condition=inc.observed_condition,
         authority_status=inc.authority_status,
+        community_report=community_report,
         is_public=inc.is_public,
         created_at=inc.created_at,
         updated_at=inc.updated_at,
