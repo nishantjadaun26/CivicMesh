@@ -76,7 +76,6 @@ class GeminiProvider:
                     response_mime_type="application/json",
                     response_schema=schema,
                     max_output_tokens=4096,
-                    temperature=0,
                 ),
             )
             if not response.text:

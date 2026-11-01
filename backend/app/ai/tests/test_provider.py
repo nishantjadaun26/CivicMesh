@@ -129,6 +129,7 @@ def test_real_sdk_serializes_schema_with_local_transport(monkeypatch):
         requests.append(request)
         body = json.loads(request.content)
         assert body["generationConfig"]["responseMimeType"] == "application/json"
+        assert "temperature" not in body["generationConfig"]
         assert body["systemInstruction"]
         assert "tools" not in body
         return httpx.Response(
