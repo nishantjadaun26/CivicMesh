@@ -21,6 +21,25 @@ is a persistent service, not a serverless request handler. Review the selected
 host plans and costs before the owner creates resources; this runbook promises
 no free hosting or zero-cost model calls. [Render worker model](https://render.com/docs/background-workers)
 
+### Zero-cost staging demo alternative
+
+When a persistent worker plan is not available, the repository also supports a
+manual staging demo: Vercel frontend, a Render **Free Web Service** for the API,
+and the `Manually run CivicMesh staging worker` GitHub Actions workflow for one
+job at a time. This requires the workflow and `--once` worker mode to be merged
+to the default branch. Store the database DSNs, legacy Supabase `service_role`
+JWT, and Gemini API key as GitHub Actions secrets named
+`CIVICMESH_STAGING_DATABASE_URL`,
+`CIVICMESH_STAGING_CHECKPOINT_DATABASE_URL`,
+`CIVICMESH_STAGING_SERVICE_ROLE_KEY`, and `CIVICMESH_GEMINI_API_KEY`.
+Run `initialize_checkpoints` once, after applying both SQL migrations. After
+submitting a genuine demo report, run `process_one_job` from GitHub Actions to
+process one queued report or follow-up. Configure Render's health check path to
+`/health/live`; `/health/ready` reports unavailable when no recent worker has
+run. Jobs remain queued until a manual worker run processes them. Free web
+services may sleep and scheduled GitHub Actions are not a reliability guarantee,
+so this option is for a demo only and is not production deployment.
+
 Order: approve code/CI → configure staging database/Auth/Storage → apply staging
 migrations and provision checkpoints → start worker → start API → configure
 frontend and exact CORS/Auth URLs → complete staging smoke checks → owner approves

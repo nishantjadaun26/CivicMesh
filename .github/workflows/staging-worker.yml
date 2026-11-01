@@ -1,0 +1,52 @@
+name: Manually run CivicMesh staging worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: One-time staging operation
+        required: true
+        type: choice
+        options:
+          - process_one_job
+          - initialize_checkpoints
+
+permissions:
+  contents: read
+
+concurrency:
+  group: civicmesh-staging-worker
+  cancel-in-progress: false
+
+jobs:
+  staging-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ENVIRONMENT: production
+      CORS_ORIGINS: https://civic-mesh.vercel.app
+      DATABASE_URL: ${{ secrets.CIVICMESH_STAGING_DATABASE_URL }}
+      CHECKPOINT_DATABASE_URL: ${{ secrets.CIVICMESH_STAGING_CHECKPOINT_DATABASE_URL }}
+      SUPABASE_URL: https://krojrxcdvvtzatcctfnf.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.CIVICMESH_STAGING_SERVICE_ROLE_KEY }}
+      STORAGE_EVIDENCE_BUCKET: civicmesh-evidence
+      PILOT_LOCALITY_NAME: IIIT Lucknow
+      PILOT_LATITUDE: "26.8008"
+      PILOT_LONGITUDE: "81.0242"
+      PILOT_RADIUS_METERS: "5000"
+      GEMINI_API_KEY: ${{ secrets.CIVICMESH_GEMINI_API_KEY }}
+      GEMINI_MODEL: gemini-3.8-flash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: 0.8.15
+          python-version: "3.11"
+      - name: Install locked worker dependencies
+        run: uv sync --project backend --frozen
+      - name: Process one queued report or follow-up
+        if: inputs.task == 'process_one_job'
+        run: backend/.venv/bin/python -m backend.app.worker --once
+      - name: Provision private LangGraph checkpoint tables
+        if: inputs.task == 'initialize_checkpoints'
+        run: backend/.venv/bin/python -m backend.app.worker.init_checkpoints --apply
