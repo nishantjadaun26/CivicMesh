@@ -1,41 +1,32 @@
-# CivicMesh citizen app
+# CivicMesh citizen frontend
 
-Frontend-only React + Vite + TypeScript application. Opens directly on Map; no landing page is implemented. All changes belong to `frontend/` on `feat/frontend`.
-
-## Run
-
-Requires Node 22.12+ (tested on Node 24) and npm.
+React + Vite + TypeScript frontend. This branch preserves the teammate's selected
+framework; it currently differs from the original Next.js stack proposal.
 
 ```powershell
-cd C:\forge\CivicMesh\frontend
-npm install
-npm run dev
+Set-Location frontend
+npm.cmd ci
+npm.cmd run typecheck
+npm.cmd run build
+npm.cmd test
 ```
 
-Open the local URL printed by Vite. Production verification:
+For development use `npm.cmd run dev`. Configure public variables using .env.example.
+No service-role keys belong in frontend variables. The map requires both
+VITE_MAP_TILE_URL and VITE_MAP_ATTRIBUTION. No provider is contacted when these are absent.
 
-```powershell
-npm run build
-npm run preview -- --port 4173
-```
+Routes: /map, /incidents, /incidents/:id, /report, /campaigns, /profile.
+The shell includes auth controls, a location/photo/audio form, incident views and
+follow-up/clarification forms. Empty and unavailable states contain no seeded citizen
+records, campaigns, rewards, fabricated identities or invented government responses.
+Old demo caches are ignored. Unconfigured mutations fail instead of reporting local success.
 
-In another terminal run `npm test`. Tests use installed Microsoft Edge in visible mode. Change `channel` in `playwright.config.ts` for a different installed browser. Tests intercept map tiles with fixtures to avoid repeatedly requesting public map infrastructure.
+Whole-project integration is still required: adapt the service DTOs and upload/report/
+clarification paths to contracts/openapi.json, generate shared API types, connect real job
+polling, and implement campaign/support services if retained. The frontend currently
+rejects incompatible incident response shapes explicitly. It must not be described as
+end-to-end operational before those contracts are connected and tested.
 
-## Routes and architecture
-
-- `/map`: default route, Leaflet markers, category/status/search filters, GPS, accessible list, issue preview and support/undo.
-- `/report`: manual/GPS pin selection, photo validation/preview/removal, optional recording, category/campaign selection, review and submission.
-- `/campaigns` and `/campaigns/:id`: local campaigns, linked reports, evidence with explicit consent, participation and sharing.
-- `/profile`: seeded identity, derived report/campaign counts, chronological contributions and transparent demo rewards.
-
-`src/app/App.tsx` owns navigation and routing. `components/map` contains map adapters. Feature modules own screen behavior. `lib/api/platform.ts` defines shared citizen data, typed report/campaign contracts and IndexedDB media storage. `lib/api/issues.ts` implements the issue service contract; replace these adapters when backend contracts are published. React external-store subscriptions keep campaign/profile consumers consistent; Map loads the same issue store on route entry.
-
-## Demo boundaries
-
-No API contracts exist in the repository. No backend, Supabase, authentication, government service or verification workflow is connected. The identity, reports, campaigns and award history are illustrative. Submissions and campaign membership persist only in this browser's local storage; uploaded photographs/audio live in IndexedDB. Do not use sensitive real-world data in this hackathon prototype.
-
-Campaign evidence is opt-in per report. Seeded reports have no photographs; campaign covers use category artwork until consented evidence exists. Grouping is manually represented by the selected campaign, not AI. Reports start as Reported; verification status names are distinct labels only, not claims of a live verification service. New submissions earn no automatic points. Sharing invokes browser sharing or copies a URL; local reports are not accessible on other devices.
-
-Map tiles require internet access and visible OpenStreetMap attribution. Set `VITE_MAP_TILE_URL` before building to replace the provider (update attribution for the chosen provider). Tests mock tiles. No marker clustering dependency is included for this small dataset; add clustering when real volumes justify it.
-
-Real-phone keyboard, safe-area, recording and touch behavior still need hardware validation. Browser tests cover Edge desktop and emulated responsive viewports. Refreshing or leaving an unfinished report currently discards its draft; completed submissions persist.
+Browser tests validate missing-service states, no runtime seed data, explicit coordinate
+confirmation, missing-backend submission failures, and responsive layouts using isolated
+test input only. They run headlessly; local Windows uses installed Edge and CI uses Chromium.

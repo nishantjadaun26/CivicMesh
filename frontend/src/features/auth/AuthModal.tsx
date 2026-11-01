@@ -178,7 +178,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             </strong>
             <p style={{ fontSize: '12px', color: 'var(--muted)', lineHeight: '1.6', margin: 0 }}>
               Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in your environment to
-              connect live Supabase Auth. In local prototype mode, citizen actions are safely stored on this device.
+              connect live Supabase Auth. Private actions require configured services and sign-in.
             </p>
           </div>
         ) : user ? (

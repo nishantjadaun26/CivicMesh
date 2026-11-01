@@ -89,12 +89,12 @@ export function App() {
           </Link>
           <div className="location-label">
             <Icon name="pin" size={18} />
-            <span>Indiranagar, Bengaluru</span>
+            <span>Pilot locality: not configured</span>
           </div>
           <div className="header-right">
-            <span className="demo-label">Demo neighborhood</span>
+            <span className="demo-label">Citizen workspace</span>
             <Link to="/profile" className="avatar" aria-label="Open profile">
-              MK
+              ?
             </Link>
           </div>
         </header>

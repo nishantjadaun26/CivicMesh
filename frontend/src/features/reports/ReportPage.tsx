@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { categories, DEMO_CENTER, type Issue } from '../../types/civic';
+import { categories, MAP_CENTER, type Issue } from '../../types/civic';
 import { citizenService, useAppData, type ReportDraft, type SubmissionProcessingStatus } from '../../lib/api/platform';
 import { LocationPicker } from '../../components/map/LocationPicker';
 import { VoiceRecorder } from './VoiceRecorder';
@@ -10,12 +10,13 @@ export function ReportPage() {
   const [params] = useSearchParams();
   const { campaigns } = useAppData();
   const [step, setStep] = useState(0);
+  const [locationConfirmed, setLocationConfirmed] = useState(false);
   const [draft, setDraft] = useState<ReportDraft>({
     title: '',
     description: '',
-    category: 'Roads',
-    location: 'Indiranagar, Bengaluru',
-    coordinates: DEMO_CENTER,
+    category: 'Garbage accumulation',
+    location: '',
+    coordinates: MAP_CENTER,
     evidenceConsent: false,
     campaignId: campaigns.some(c => c.id === params.get('campaign'))
       ? params.get('campaign')!
@@ -35,8 +36,8 @@ export function ReportPage() {
 
   function advance() {
     setError('');
-    if (step === 0 && !draft.location.trim()) {
-      setError('Add a location name.');
+    if (step === 0 && (!draft.location.trim() || !locationConfirmed)) {
+      setError('Add a location name and confirm the coordinates.');
       return;
     }
     if (step === 1 && !draft.photo) {
@@ -91,7 +92,7 @@ export function ReportPage() {
         </h1>
         <p className="intro">
           {isBackend
-            ? 'Thank you for looking out for your neighborhood. Your report was successfully received and queued by the municipal backend.'
+            ? 'Thank you for looking out for your neighborhood. Your report was successfully received and queued by the CivicMesh backend.'
             : 'Saved on this device only. The report is stored locally on this device.'}
         </p>
 
@@ -255,7 +256,7 @@ export function ReportPage() {
             <>
               <LocationPicker
                 value={draft.coordinates}
-                onChange={coordinates => setDraft({ ...draft, coordinates })}
+                onChange={coordinates => { setDraft({ ...draft, coordinates }); setLocationConfirmed(false); }}
               />
               <label>
                 Location name
@@ -268,7 +269,9 @@ export function ReportPage() {
             </>
           )}
 
-          {/* STEP 1: Photo & Spoken/Audio Note Evidence */}
+          {step === 0 && <label className="checkbox-label"><input type="checkbox" checked={locationConfirmed} onChange={event => setLocationConfirmed(event.target.checked)} />I have confirmed the latitude and longitude.</label>}
++
++          {/* STEP 1: Photo & Spoken/Audio Note Evidence */}
           {step === 1 && (
             <>
               <label className="upload-control">
@@ -342,7 +345,7 @@ export function ReportPage() {
                     setDraft({ ...draft, category: e.target.value as ReportDraft['category'] })
                   }
                 >
-                  {categories.map(c => (
+                  {categories.filter(c => c === 'Garbage accumulation' || c === 'Water leak').map(c => (
                     <option key={c}>{c}</option>
                   ))}
                 </select>

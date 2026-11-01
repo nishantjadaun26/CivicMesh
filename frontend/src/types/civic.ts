@@ -87,4 +87,5 @@ export interface IssueService {
   ): Promise<Issue>;
 }
 
-export const DEMO_CENTER: Coordinates = { lat: 12.9784, lng: 77.6408 };
+// Neutral world-map viewport, never an incident or confirmed report location.
+export const MAP_CENTER: Coordinates = { lat: 0, lng: 0 };

@@ -8,13 +8,14 @@ export default defineConfig({
   webServer: {
     command: 'npm run preview -- --port 4173',
     url: 'http://127.0.0.1:4173',
-    reuseExistingServer: true,
+    reuseExistingServer: !process.env.CI,
+    env: { VITE_API_URL: '', VITE_SUPABASE_URL: '', VITE_SUPABASE_ANON_KEY: '', VITE_MAP_TILE_URL: '', VITE_MAP_ATTRIBUTION: '' },
     timeout: 15000,
   },
   use: {
     baseURL: 'http://127.0.0.1:4173',
-    channel: 'msedge',
-    headless: false,
+    channel: process.env.CI ? undefined : 'msedge',
+    headless: true,
     trace: 'retain-on-failure',
   },
   reporter: 'list',

@@ -95,7 +95,7 @@ export function IssuePreview({ issue, onClose, onSupport, onUpdate }: Props) {
       ) : (
         <div className="evidence-empty">
           <Icon name="search" />
-          <span>No photo attached to this demo report.</span>
+          <span>No approved photo is available.</span>
         </div>
       )}
 

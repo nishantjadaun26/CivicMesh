@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { citizenService, useAppData, getUserCampaignMemberships, demoUser } from '../../lib/api/platform';
+import { citizenService, useAppData, getUserCampaignMemberships, guestUser } from '../../lib/api/platform';
 import { CategoryIcon, StatusBadge } from '../../components/IssueMeta';
 import { Media } from '../../components/Media';
 import { useAuth } from '../../lib/supabase/client';
@@ -12,7 +12,7 @@ export function CampaignsPage() {
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
 
-  const activeUserId = user ? user.id : demoUser.id;
+  const activeUserId = user ? user.id : guestUser.id;
 
   // Derive user-specific campaign membership scoped to active user
   const memberships = getUserCampaignMemberships(activeUserId);
@@ -79,6 +79,8 @@ export function CampaignsPage() {
         </div>
         <span className="demo-label">Community campaigns · Demo</span>
       </div>
+
+      {campaigns.length === 0 && <p role="status" className="panel">Campaign services are not configured. No campaigns have been loaded.</p>}
 
       {message && (
         <p role="status" className="notice">

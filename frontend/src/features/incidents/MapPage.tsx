@@ -10,7 +10,7 @@ import { IssuePreview } from './IssuePreview';
 export function MapPage() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [listMeta, setListMeta] = useState<{ source: 'api' | 'local'; backendFailed?: boolean }>({
-    source: 'local',
+    source: 'api',
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -210,6 +210,7 @@ export function MapPage() {
 
       {/* Notices visible in both map and list views at all breakpoints */}
       <div className="discovery-notices" style={{ margin: '8px 0 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {error && <p role="alert" className="error-text">{error}</p>}
         {listMeta.source === 'local' && (
           <div
             className="local-source-notice"
@@ -222,7 +223,7 @@ export function MapPage() {
             }}
           >
             <Icon name="pin" size={14} />
-            <span>Sample data · Not official reports</span>
+            <span>Backend service is not configured.</span>
           </div>
         )}
         {listMeta.backendFailed && (
@@ -238,7 +239,7 @@ export function MapPage() {
               color: '#684022',
             }}
           >
-            Backend service was unavailable. Showing local sample data.
+            Backend service was unavailable. No incident data was loaded.
           </div>
         )}
       </div>
@@ -295,7 +296,7 @@ export function MapPage() {
                   ))}
                 </div>
               ) : error ? (
-                <div className="empty-state" role="alert">
+                <div className="empty-state">
                   <Icon name="refresh" size={30} />
                   <h3>Let’s try that again</h3>
                   <p>{error}</p>

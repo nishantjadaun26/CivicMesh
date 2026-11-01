@@ -1,6 +1,5 @@
 import { useSyncExternalStore } from 'react';
 import type { Coordinates, Category, Issue } from '../../types/civic';
-import { seedIssues } from '../mocks/issues';
 import { getAuthHeaders, getCurrentUser } from '../supabase/client';
 
 export interface User {
@@ -54,84 +53,11 @@ interface State {
   campaigns: Campaign[];
 }
 
-const seeds: Campaign[] = [
-  {
-    id: 'safer-streets',
-    title: 'A safer walk to school',
-    description:
-      'Neighbors are documenting damaged roads and uneven pavements around the school routes. Add a related report to help build a clear picture of the problem.',
-    category: 'Roads',
-    location: 'Indiranagar school routes',
-    joined: false,
-    followers: ['neighbor-1', 'neighbor-5'],
-    updatedAt: '2026-10-31',
-  },
-  {
-    id: 'clean-corners',
-    title: 'Clean corners, shared responsibility',
-    description:
-      'A neighborhood effort to document recurring waste accumulation and share cleanup updates.',
-    category: 'Garbage accumulation',
-    location: '100 Feet Road and nearby parks',
-    joined: false,
-    followers: ['me', 'neighbor-2'],
-    updatedAt: '2026-10-30',
-  },
-  {
-    id: 'rain-ready',
-    title: 'Keep our streets rain-ready',
-    description:
-      'Bring together reports of waterlogging and blocked drains before the next heavy rain.',
-    category: 'Water leak',
-    location: 'HAL 2nd Stage',
-    joined: false,
-    followers: ['neighbor-3', 'neighbor-4'],
-    updatedAt: '2026-10-29',
-  },
-];
-
-seedIssues.forEach(i => {
-  i.campaignId =
-    i.category === 'Roads'
-      ? 'safer-streets'
-      : i.category === 'Waste' || i.category === 'Garbage accumulation'
-      ? 'clean-corners'
-      : i.category === 'Water' || i.category === 'Drainage' || i.category === 'Water leak'
-      ? 'rain-ready'
-      : undefined;
-  if (!i.observedCondition) {
-    i.observedCondition = `Citizen report: ${i.description || 'Observed by neighborhood contributor'}`;
-  }
-});
-
-const key = 'civicmesh.app.v1';
-let state: State = { issues: seedIssues, campaigns: seeds };
-try {
-  const saved = JSON.parse(localStorage.getItem(key) ?? 'null');
-  if (
-    saved &&
-    Array.isArray(saved.issues) &&
-    Array.isArray(saved.campaigns) &&
-    saved.issues.every((i: Issue) => i.id && i.coordinates && i.category)
-  ) {
-    state = saved;
-  }
-} catch {
-  /* Use coherent seed data when storage is unavailable or corrupt. */
-}
+// Operational data is loaded only from configured services. Ignore previous demo caches.
+let state: State = { issues: [], campaigns: [] };
 
 const listeners = new Set<()=>void>();
 function commit(next: State) {
-  try {
-    localStorage.setItem(key, JSON.stringify(next));
-  } catch {
-    throw new Error('Your changes could not be saved. Free some browser storage and try again.');
-  }
-  state = next;
-  listeners.forEach(fn => fn());
-}
-
-function notify(next: State) {
   state = next;
   listeners.forEach(fn => fn());
 }
@@ -144,31 +70,8 @@ export function useAppData() {
   }, getState);
 }
 
-export const demoUser: User = {
-  id: 'me',
-  name: 'Meera Krishnan',
-  username: 'meera.indiranagar',
-  joined: 'October 2026',
-};
-
-export const contributions: Contribution[] = [
-  {
-    id: 'cleanup',
-    title: 'Shared a neighborhood cleanup update',
-    date: '2026-10-27',
-    points: 20,
-    reason: 'Helpful follow-up evidence reviewed in this demo.',
-    issueId: 'CM-1037',
-  },
-  {
-    id: 'context',
-    title: 'Added useful location context',
-    date: '2026-10-30',
-    points: 10,
-    reason: 'Clear, actionable location details in this demo.',
-    issueId: 'CM-1040',
-  },
-];
+export const guestUser: User = { id: '', name: 'Guest', username: '', joined: '' };
+export const contributions: Contribution[] = [];
 
 function db() {
   return new Promise<IDBDatabase>((resolve, reject) => {
@@ -226,10 +129,6 @@ export function getUserCampaignMemberships(userId: string): Set<string> {
   try {
     const raw = localStorage.getItem(`civicmesh.campaign-membership.${userId}`);
     if (raw) return new Set(JSON.parse(raw));
-    // For demo/unauthenticated user, default to initial seed campaigns marked as joined
-    if (userId === demoUser.id || userId === 'me') {
-      return new Set(state.campaigns.filter(c => c.joined).map(c => c.id));
-    }
     return new Set();
   } catch {
     return new Set();
@@ -248,6 +147,7 @@ export function setUserCampaignMemberships(userId: string, ids: Set<string>): vo
 
 export const citizenService: CitizenService = {
   async createReport(draft, onProgress) {
+    if (!import.meta.env.VITE_API_URL) throw new Error('Backend service is not configured. Your report has not been submitted.');
     if (!draft.photo) throw new Error('Add a photograph before submitting.');
 
     if (!draft.idempotencyKey) {
@@ -256,8 +156,9 @@ export const citizenService: CitizenService = {
     const idempotencyKey = draft.idempotencyKey;
     const apiUrl = import.meta.env.VITE_API_URL;
     const currentUser = await getCurrentUser();
-    const reporterName = currentUser?.email ? currentUser.email.split('@')[0] : demoUser.name;
-    const authorId = currentUser ? currentUser.id : 'me';
+    if (!currentUser) throw new Error('Sign in before submitting a private report.');
+    const reporterName = currentUser.email?.split('@')[0] ?? 'Citizen';
+    const authorId = currentUser.id;
 
     if (apiUrl) {
       onProgress?.({
@@ -353,8 +254,9 @@ export const citizenService: CitizenService = {
       }
 
       const reportData = await reportRes.json();
-      const backendReportId = reportData.report_id || reportData.id || `CM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+      const backendReportId = reportData.report_id || reportData.id;
       const backendJobId = reportData.job_id || reportData.jobId;
+      if (!backendReportId || !backendJobId) throw new Error('Backend response did not include a report ID and processing job.');
 
       onProgress?.({
         step: 4,
@@ -415,70 +317,11 @@ export const citizenService: CitizenService = {
       return issue;
     }
 
-    // Unconfigured backend branch: save report on device only
-    onProgress?.({
-      step: 1,
-      message: 'Saving report locally on this device…',
-      isBackendConnected: false,
-    });
-
-    const id = `CM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-    await saveMedia(id + '-photo', draft.photo);
-    if (draft.audio) await saveMedia(id + '-audio', draft.audio);
-
-    onProgress?.({
-      step: 6,
-      message: 'Saved on this device only.',
-      reportId: id,
-      isBackendConnected: false,
-    });
-
-    const issue: Issue = {
-      id,
-      title: draft.title.trim() || `${draft.category} issue near ${draft.location}`,
-      description: draft.description.trim(),
-      category: draft.category,
-      location: draft.location,
-      coordinates: draft.coordinates,
-      photoId: id + '-photo',
-      audioId: draft.audio ? id + '-audio' : undefined,
-      evidenceConsent: draft.evidenceConsent,
-      campaignId: draft.campaignId,
-      status: 'Reported',
-      reporter: reporterName,
-      authorId: authorId,
-      reportedAt: new Date().toISOString(),
-      supporters: 0,
-      supported: false,
-      authorityStatus: undefined,
-      observedCondition: draft.description.trim() || 'Saved on this device only',
-    };
-
-    commit({ ...state, issues: [issue, ...state.issues] });
-    return issue;
+    throw new Error('Backend service is unavailable. Your report has not been submitted.');
   },
 
-  async toggleCampaign(id) {
-    const currentUser = await getCurrentUser();
-    const userId = currentUser ? currentUser.id : demoUser.id;
-
-    const previousMemberships = getUserCampaignMemberships(userId);
-    const nextMemberships = new Set(previousMemberships);
-    if (nextMemberships.has(id)) {
-      nextMemberships.delete(id);
-    } else {
-      nextMemberships.add(id);
-    }
-
-    // setUserCampaignMemberships throws if storage fails; previous membership is preserved
-    setUserCampaignMemberships(userId, nextMemberships);
-
-    // Notify subscribers without rewriting the unrelated issue list.
-    // Ensure membership updates change the reactive snapshot consumed by useSyncExternalStore.
-    notify({
-      ...state,
-      campaigns: [...state.campaigns],
-    });
+  async toggleCampaign(_id) {
+    throw new Error('Campaign participation is not implemented yet.');
   },
 };
 

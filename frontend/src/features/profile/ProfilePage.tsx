@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAppData, demoUser, contributions, getUserCampaignMemberships } from '../../lib/api/platform';
+import { useAppData, guestUser, contributions, getUserCampaignMemberships } from '../../lib/api/platform';
 import { StatusBadge, CategoryIcon } from '../../components/IssueMeta';
 import { useAuth } from '../../lib/supabase/client';
 import { AuthModal } from '../auth/AuthModal';
@@ -11,16 +11,15 @@ export function ProfilePage() {
   const { user, isConfigured } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
 
-  const isDemo = !user;
-  const currentUserId = user ? user.id : demoUser.id;
+  const currentUserId = user ? user.id : guestUser.id;
   const memberships = getUserCampaignMemberships(currentUserId);
 
   const mine = issues
-    .filter(i => (user ? i.authorId === user.id : i.authorId === demoUser.id || i.authorId === 'me'))
+    .filter(i => Boolean(user && i.authorId === user.id))
     .sort((a, b) => Date.parse(b.reportedAt) - Date.parse(a.reportedAt));
 
   const joined = campaigns.filter(c => memberships.has(c.id));
-  const myContributions = isDemo ? contributions : [];
+  const myContributions = contributions;
   const points = myContributions.reduce((n, c) => n + c.points, 0);
 
   const stats = [
@@ -48,7 +47,7 @@ export function ProfilePage() {
             <Icon name="check" size={14} />
             {user ? 'Account Session' : 'Citizen Auth'}
           </button>
-          <span className="demo-label">Demo account · No sign-in required</span>
+          <span className="demo-label">Sign in to view your private reports</span>
         </div>
       </div>
 
@@ -80,7 +79,7 @@ export function ProfilePage() {
               ? 'Access token is automatically attached to backend API requests.'
               : isConfigured
               ? 'Sessions and tokens are managed securely in the browser.'
-              : 'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment. Prototype state is kept safely in browser storage.'}
+              : 'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment. Private actions require a configured backend.'}
           </span>
         </div>
         <button
@@ -95,13 +94,13 @@ export function ProfilePage() {
 
       <div className="profile-identity">
         <span className="profile-avatar">
-          {user ? user.email?.slice(0, 2).toUpperCase() : 'MK'}
+          {user ? user.email?.slice(0, 2).toUpperCase() : '?' }
         </span>
         <div>
-          <h2>{user ? user.email?.split('@')[0] : demoUser.name}</h2>
-          <p>{user ? user.email : `@${demoUser.username}`}</p>
+          <h2>{user ? user.email?.split('@')[0] : guestUser.name}</h2>
+          <p>{user ? user.email : `@${guestUser.username}`}</p>
           <span className="help">
-            Indiranagar, Bengaluru · Joined {demoUser.joined}
+            Your account details come from your authenticated session.
           </span>
         </div>
       </div>
@@ -217,7 +216,7 @@ export function ProfilePage() {
                 Demonstration activity is separated
               </h3>
               <p style={{ fontSize: '12px', color: 'var(--muted)', margin: 0, lineHeight: '1.5' }}>
-                Device-wide demo activity for {demoUser.name} is stored locally and kept separate from your personal authenticated account.
+                Sign in to load your account activity when the backend is connected.
               </p>
             </div>
           )}
@@ -231,35 +230,13 @@ export function ProfilePage() {
             <p className="help">
               {user
                 ? 'Personal verified civic points. Submitting reports does not award points automatically.'
-                : 'Demo awards only. No cash value or redemption. New reports earn no automatic points.'}
+                : 'Verified contribution rewards are not configured.'}
             </p>
           </div>
 
           <div className="panel">
             <h2>Community badges</h2>
-            {user ? (
-              <p className="empty-copy">
-                Badges are awarded after verified field reviews and community validations.
-              </p>
-            ) : (
-              <>
-                <div className="badge-row">
-                  <span className="badge-seal">1</span>
-                  <div>
-                    <strong>First Report</strong>
-                    <p>Your first local concern documented.</p>
-                  </div>
-                </div>
-                <div className="badge-row">
-                  <span className="badge-seal">✓</span>
-                  <div>
-                    <strong>Neighborhood Helper</strong>
-                    <p>Useful context and follow-up evidence.</p>
-                  </div>
-                </div>
-                <p className="help">Badges reflect the seeded demo contribution history.</p>
-              </>
-            )}
+            <p className="empty-copy">Verified badges are not configured.</p>
           </div>
         </aside>
       </div>
