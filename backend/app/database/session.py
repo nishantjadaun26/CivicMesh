@@ -1,5 +1,6 @@
 """Database session management and dependency."""
 
+import ssl
 from collections.abc import AsyncGenerator
 
 from backend.app.core.config import get_settings
@@ -12,6 +13,7 @@ engine = create_async_engine(
     pool_pre_ping=True,
     echo=settings.ENVIRONMENT == "development" and settings.LOG_LEVEL.upper() == "DEBUG",
     hide_parameters=True,
+    connect_args={"ssl": ssl.create_default_context()} if settings.ENVIRONMENT == "production" else {},
 )
 
 AsyncSessionLocal = async_sessionmaker(

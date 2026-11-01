@@ -19,8 +19,13 @@ async def open_checkpointer(settings):
             prepare_threshold=0,
             row_factory=dict_row,
             options="-c search_path=civicmesh_checkpoints,public",
+            **(
+                {"sslmode": "verify-full", "sslrootcert": "system"}
+                if settings.ENVIRONMENT == "production"
+                else {}
+            ),
         ) as connection:
-            if settings.ENVIRONMENT == "production" and not connection.info.ssl_in_use:
+            if settings.ENVIRONMENT == "production" and not connection.pgconn.ssl_in_use:
                 raise RuntimeError("Checkpoint connection requires TLS")
             async with connection.cursor() as cursor:
                 await cursor.execute("SELECT 1 FROM civicmesh_checkpoints.checkpoints LIMIT 0")

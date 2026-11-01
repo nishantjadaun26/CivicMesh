@@ -20,6 +20,11 @@ async def apply():
         prepare_threshold=0,
         row_factory=dict_row,
         options="-c search_path=civicmesh_checkpoints,public",
+        **(
+            {"sslmode": "verify-full", "sslrootcert": "system"}
+            if settings.ENVIRONMENT == "production"
+            else {}
+        ),
     ) as conn:
         await conn.execute("CREATE SCHEMA IF NOT EXISTS civicmesh_checkpoints")
         await conn.execute(

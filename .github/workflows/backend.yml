@@ -51,7 +51,7 @@ jobs:
       - name: Provision only the disposable CI database
         run: >-
           docker exec ${{ job.services.database.id }} psql -U supabase_admin -d civicmesh_test -v ON_ERROR_STOP=1
-          -c 'ALTER DATABASE civicmesh_test OWNER TO postgres; CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS vector;'
+          -c 'ALTER DATABASE civicmesh_test OWNER TO postgres; CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS vector; CREATE SCHEMA IF NOT EXISTS auth; CREATE SCHEMA IF NOT EXISTS storage; GRANT USAGE,CREATE ON SCHEMA auth,storage TO postgres; GRANT ALL ON ALL TABLES IN SCHEMA auth,storage TO postgres;'
       - uses: astral-sh/setup-uv@v6
         with:
           version: '0.8.15'
