@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../lib/supabase/client';
 import { Icon } from '../../components/Icon';
 
@@ -15,6 +15,62 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousActiveElement = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Save previous active element before modal steals focus
+    previousActiveElement.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    // Focus the first input or modal container
+    const timer = setTimeout(() => {
+      if (dialogRef.current) {
+        const firstFocusable = dialogRef.current.querySelector<HTMLElement>(
+          'input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        firstFocusable?.focus();
+      }
+    }, 50);
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (e.key === 'Tab' && dialogRef.current) {
+        const focusables = dialogRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('keydown', handleKeyDown);
+      if (previousActiveElement.current?.isConnected) {
+        previousActiveElement.current.focus();
+      }
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -68,6 +124,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       }}
     >
       <div
+        ref={dialogRef}
         className="panel auth-panel"
         style={{
           width: '100%',

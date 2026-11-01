@@ -71,8 +71,14 @@ export interface Issue {
   };
 }
 
+export interface IssueListResult {
+  issues: Issue[];
+  source: 'api' | 'local';
+  backendFailed?: boolean;
+}
+
 export interface IssueService {
-  list(signal?: AbortSignal): Promise<Issue[]>;
+  list(signal?: AbortSignal): Promise<IssueListResult>;
   toggleSupport(id: string): Promise<Issue>;
   addFollowUp(issueId: string, text: string, photo?: File): Promise<Issue>;
   submitClarification(

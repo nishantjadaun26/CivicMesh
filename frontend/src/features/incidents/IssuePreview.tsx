@@ -134,12 +134,7 @@ export function IssuePreview({ issue, onClose, onSupport, onUpdate }: Props) {
             </strong>
           </div>
           <p style={{ margin: 0, fontSize: '13px', color: '#1e3a5f', fontWeight: 600 }}>
-            {issue.authorityStatus ||
-              (issue.status === 'Authority Verified'
-                ? 'Official inspection confirmed by municipal engineering team.'
-                : issue.status === 'Resolved'
-                ? 'Closed by municipal authorities following field repair.'
-                : 'No official update yet. Pending municipal department inspection.')}
+            {issue.authorityStatus || 'No official update recorded'}
           </p>
         </div>
 

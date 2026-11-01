@@ -11,18 +11,22 @@ export function ProfilePage() {
   const { user, isConfigured } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
 
+  const isDemo = !user;
   const mine = issues
-    .filter(i => i.authorId === demoUser.id)
+    .filter(i => (user ? i.authorId === user.id : i.authorId === demoUser.id || i.authorId === 'me'))
     .sort((a, b) => Date.parse(b.reportedAt) - Date.parse(a.reportedAt));
-  const joined = campaigns.filter(c => c.joined);
-  const points = contributions.reduce((n, c) => n + c.points, 0);
+  const joined = isDemo
+    ? campaigns.filter(c => c.joined)
+    : campaigns.filter(c => c.followers?.includes(user.id));
+  const myContributions = isDemo ? contributions : [];
+  const points = myContributions.reduce((n, c) => n + c.points, 0);
 
   const stats = [
     ['Reports', mine.length],
     ['Under review', mine.filter(i => i.status === 'Under Review').length],
     ['Resolved', mine.filter(i => i.status === 'Resolved').length],
     ['Campaigns joined', joined.length],
-    ['Helpful contributions', contributions.length],
+    ['Helpful contributions', myContributions.length],
   ];
 
   return (
@@ -171,7 +175,7 @@ export function ProfilePage() {
                   'Report submitted. Points are not awarded simply for submitting.',
                 issueId: i.id,
               })),
-              ...contributions,
+              ...myContributions,
             ]
               .sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
               .map(c => (
@@ -187,7 +191,29 @@ export function ProfilePage() {
                   <span>{c.points ? `+${c.points} pts` : '0 pts'}</span>
                 </div>
               ))}
+            {mine.length === 0 && myContributions.length === 0 && (
+              <p className="empty-copy">No contributions recorded for your account yet.</p>
+            )}
           </div>
+
+          {user && (
+            <div
+              className="panel"
+              style={{
+                background: '#faf6f0',
+                border: '1.5px dashed var(--edge)',
+                marginTop: '16px',
+                padding: '16px',
+              }}
+            >
+              <h3 style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#7a5229', margin: '0 0 6px 0' }}>
+                Demonstration activity is separated
+              </h3>
+              <p style={{ fontSize: '12px', color: 'var(--muted)', margin: 0, lineHeight: '1.5' }}>
+                Device-wide demo activity for {demoUser.name} is stored locally and kept separate from your personal authenticated account.
+              </p>
+            </div>
+          )}
         </section>
 
         <aside>
@@ -196,27 +222,37 @@ export function ProfilePage() {
             <strong className="points-value">{points}</strong>
             <p>For useful, reviewed contributions.</p>
             <p className="help">
-              Demo awards only. No cash value or redemption. New reports earn no automatic points.
+              {user
+                ? 'Personal verified civic points. Submitting reports does not award points automatically.'
+                : 'Demo awards only. No cash value or redemption. New reports earn no automatic points.'}
             </p>
           </div>
 
           <div className="panel">
             <h2>Community badges</h2>
-            <div className="badge-row">
-              <span className="badge-seal">1</span>
-              <div>
-                <strong>First Report</strong>
-                <p>Your first local concern documented.</p>
-              </div>
-            </div>
-            <div className="badge-row">
-              <span className="badge-seal">✓</span>
-              <div>
-                <strong>Neighborhood Helper</strong>
-                <p>Useful context and follow-up evidence.</p>
-              </div>
-            </div>
-            <p className="help">Badges reflect the seeded demo contribution history.</p>
+            {user ? (
+              <p className="empty-copy">
+                Badges are awarded after verified field reviews and community validations.
+              </p>
+            ) : (
+              <>
+                <div className="badge-row">
+                  <span className="badge-seal">1</span>
+                  <div>
+                    <strong>First Report</strong>
+                    <p>Your first local concern documented.</p>
+                  </div>
+                </div>
+                <div className="badge-row">
+                  <span className="badge-seal">✓</span>
+                  <div>
+                    <strong>Neighborhood Helper</strong>
+                    <p>Useful context and follow-up evidence.</p>
+                  </div>
+                </div>
+                <p className="help">Badges reflect the seeded demo contribution history.</p>
+              </>
+            )}
           </div>
         </aside>
       </div>

@@ -9,6 +9,9 @@ import { IssuePreview } from './IssuePreview';
 
 export function MapPage() {
   const [issues, setIssues] = useState<Issue[]>([]);
+  const [listMeta, setListMeta] = useState<{ source: 'api' | 'local'; backendFailed?: boolean }>({
+    source: 'local',
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -40,7 +43,10 @@ export function MapPage() {
     setError('');
     issueService
       .list(controller.signal)
-      .then(setIssues)
+      .then(res => {
+        setIssues(res.issues);
+        setListMeta({ source: res.source, backendFailed: res.backendFailed });
+      })
       .catch(e => {
         if (!controller.signal.aborted)
           setError(
@@ -212,8 +218,26 @@ export function MapPage() {
           <div className="map-caption">
             <Icon name="people" size={17} />
             <span>Better streets start with a shared view.</span>
-            <span>Sample data · Not official reports</span>
+            {listMeta.source === 'local' && (
+              <span>Sample data · Not official reports</span>
+            )}
           </div>
+          {listMeta.backendFailed && (
+            <div
+              role="status"
+              style={{
+                margin: '8px 12px',
+                padding: '8px 12px',
+                background: '#faf0e6',
+                border: '1px solid #c49a6c',
+                borderRadius: '6px',
+                fontSize: '12px',
+                color: '#684022',
+              }}
+            >
+              Backend service was unavailable. Showing local sample data.
+            </div>
+          )}
         </div>
 
         <aside className="results-panel" aria-label="Nearby issues">

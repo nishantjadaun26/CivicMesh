@@ -80,17 +80,24 @@ export function ReportPage() {
 
   // Success and Extraction Processing Result View
   if (result) {
+    const isBackend = Boolean(progress?.isBackendConnected);
     return (
       <div className="screen narrow">
         <div className="success-mark">✓</div>
-        <h1>Report received.</h1>
-        <p className="intro">Thank you for looking out for your neighborhood.</p>
+        <h1>
+          Report received. {isBackend ? 'Confirmed by backend.' : 'Saved on this device only.'}
+        </h1>
+        <p className="intro">
+          {isBackend
+            ? 'Thank you for looking out for your neighborhood. Your report was successfully received and queued by the municipal backend.'
+            : 'Saved on this device only. The report is stored locally on this device.'}
+        </p>
 
         {/* Processing Sequence & Job Details */}
         <div className="panel" style={{ borderLeft: '4px solid var(--accent)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2>{result.id}</h2>
-            {result.jobId && (
+            {isBackend && result.jobId && (
               <span style={{ fontSize: '12px', fontFamily: 'monospace', color: 'var(--muted)' }}>
                 Job: {result.jobId}
               </span>
@@ -101,7 +108,7 @@ export function ReportPage() {
           </p>
 
           {/* AI Extraction Result */}
-          {result.extractionResult && (
+          {isBackend && result.extractionResult && (
             <div style={{ margin: '14px 0', padding: '12px', background: 'var(--ground)', borderRadius: '8px' }}>
               <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--muted)', fontWeight: 800 }}>
                 Automated Extraction Result
@@ -120,11 +127,13 @@ export function ReportPage() {
           <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--edge)', display: 'grid', gap: '10px' }}>
             <div>
               <span style={{ fontSize: '11px', fontWeight: 800, color: '#9c5b28' }}>Observed Condition:</span>
-              <p style={{ fontSize: '13px', margin: '2px 0' }}>{result.observedCondition}</p>
+              <p style={{ fontSize: '13px', margin: '2px 0' }}>{result.observedCondition || 'Reported on device'}</p>
             </div>
             <div>
               <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--blue)' }}>Authority Status:</span>
-              <p style={{ fontSize: '13px', margin: '2px 0', color: 'var(--muted)' }}>{result.authorityStatus}</p>
+              <p style={{ fontSize: '13px', margin: '2px 0', color: 'var(--muted)' }}>
+                {result.authorityStatus || 'No official update recorded'}
+              </p>
             </div>
           </div>
         </div>
@@ -192,7 +201,7 @@ export function ReportPage() {
 
         {clarificationSubmitted && (
           <p role="status" style={{ color: 'var(--green)', fontSize: '13px', margin: '12px 0' }}>
-            ✓ Clarification recorded. Resumed processing with updated extraction details.
+            ✓ Clarification recorded.
           </p>
         )}
 
@@ -316,7 +325,7 @@ export function ReportPage() {
               </label>
 
               {/* MediaRecorder & Audio File fallback */}
-              <VoiceRecorder onChange={audio => setDraft(d => ({ ...d, audio }))} />
+              <VoiceRecorder value={draft.audio} onChange={audio => setDraft(d => ({ ...d, audio }))} />
             </>
           )}
 
@@ -440,7 +449,7 @@ export function ReportPage() {
               )}
 
               <p className="notice">
-                Submissions are stored securely. Backend verification runs automated category extraction and checks idempotency.
+                Submissions are stored securely on this device and synchronized when backend services are connected.
               </p>
             </>
           )}

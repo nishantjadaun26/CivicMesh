@@ -28,6 +28,12 @@ export async function getAccessToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
+export async function getCurrentUser(): Promise<User | null> {
+  if (!supabase) return null;
+  const { data } = await supabase.auth.getUser();
+  return data.user ?? null;
+}
+
 export async function getAuthHeaders(): Promise<Record<string, string>> {
   const token = await getAccessToken();
   if (token) {

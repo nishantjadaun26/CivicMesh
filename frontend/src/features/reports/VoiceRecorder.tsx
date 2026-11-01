@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 
-export function VoiceRecorder({ onChange }: { onChange: (blob: Blob | undefined) => void }) {
+export interface VoiceRecorderProps {
+  value?: Blob;
+  onChange: (blob: Blob | undefined) => void;
+}
+
+export function VoiceRecorder({ value, onChange }: VoiceRecorderProps) {
   const [recording, setRecording] = useState(false);
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
@@ -22,9 +27,19 @@ export function VoiceRecorder({ onChange }: { onChange: (blob: Blob | undefined)
     };
   }, []);
 
-  useEffect(() => () => {
-    if (url) URL.revokeObjectURL(url);
-  }, [url]);
+  useEffect(() => {
+    if (!value) {
+      setUrl('');
+      setFileName('');
+      return;
+    }
+    const objectUrl = URL.createObjectURL(value);
+    setUrl(objectUrl);
+    setFileName(value instanceof File ? value.name : 'Recorded audio note');
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [value]);
 
   async function start() {
     setError('');
@@ -51,8 +66,10 @@ export function VoiceRecorder({ onChange }: { onChange: (blob: Blob | undefined)
         if (!alive.current) return;
         const blob = new Blob(chunks, { type: r.mimeType || 'audio/webm' });
         onChange(blob);
-        setUrl(URL.createObjectURL(blob));
-        setFileName('Recorded audio note');
+        if (!value) {
+          setUrl(URL.createObjectURL(blob));
+          setFileName('Recorded audio note');
+        }
         setRecording(false);
       };
       r.start();
@@ -86,8 +103,10 @@ export function VoiceRecorder({ onChange }: { onChange: (blob: Blob | undefined)
     }
 
     onChange(file);
-    setUrl(URL.createObjectURL(file));
-    setFileName(file.name);
+    if (!value) {
+      setUrl(URL.createObjectURL(file));
+      setFileName(file.name);
+    }
   }
 
   function clearAudio() {
@@ -119,25 +138,22 @@ export function VoiceRecorder({ onChange }: { onChange: (blob: Blob | undefined)
             </button>
           )}
 
-          <label
+          <button
+            type="button"
             className="secondary-button"
-            style={{
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              margin: 0,
-            }}
+            onClick={() => fileInputRef.current?.click()}
           >
-            <span>Choose audio file</span>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg"
-              aria-label="Upload audio file"
-              onChange={handleFileUpload}
-              style={{ display: 'none' }}
-            />
-          </label>
+            Choose audio file
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            tabIndex={-1}
+            accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg"
+            aria-label="Upload audio file"
+            onChange={handleFileUpload}
+            style={{ display: 'none' }}
+          />
         </div>
       )}
 

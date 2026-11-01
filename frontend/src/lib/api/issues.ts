@@ -1,4 +1,4 @@
-import type { Issue, IssueService, FollowUpUpdate } from '../../types/civic';
+import type { Issue, IssueService, IssueListResult, FollowUpUpdate } from '../../types/civic';
 import { getState, updateIssue, saveMedia } from './platform';
 import { getAuthHeaders } from '../supabase/client';
 
@@ -12,14 +12,8 @@ try {
 }
 
 const resolve = (issue: Issue): Issue => {
-  // Ensure clear separation between Authority status and Observed condition (Requirement G)
-  const authorityStatus =
-    issue.authorityStatus ??
-    (issue.status === 'Authority Verified'
-      ? 'Official inspection confirmed by municipal engineering team.'
-      : issue.status === 'Resolved'
-      ? 'Closed by municipal authorities following field repair.'
-      : 'No official update yet. Pending municipal department inspection.');
+  // Preserve explicitly provided authorityStatus, leaving it undefined when absent (Requirement G)
+  const authorityStatus = issue.authorityStatus;
 
   const observedCondition =
     issue.observedCondition ??
@@ -37,19 +31,30 @@ const resolve = (issue: Issue): Issue => {
 };
 
 export const issueService: IssueService = {
-  async list(signal) {
+  async list(signal): Promise<IssueListResult> {
     const apiUrl = import.meta.env.VITE_API_URL;
+    let backendFailed = false;
+
     // Attempt real backend call if configured and available
-    if (apiUrl && !apiUrl.includes('localhost:8000') && !apiUrl.includes('127.0.0.1:8000')) {
+    if (apiUrl) {
       try {
         const headers = await getAuthHeaders();
         const res = await fetch(`${apiUrl}/incidents`, { signal, headers });
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data)) return data.map(resolve);
+          if (Array.isArray(data)) {
+            return {
+              issues: data.map(resolve),
+              source: 'api',
+              backendFailed: false,
+            };
+          }
+        } else {
+          backendFailed = true;
         }
-      } catch {
-        // Fall back gracefully to local store
+      } catch (err) {
+        if (signal?.aborted) throw err;
+        backendFailed = true;
       }
     }
 
@@ -69,10 +74,32 @@ export const issueService: IssueService = {
         );
       }
     });
-    return getState().issues.map(resolve);
+
+    return {
+      issues: getState().issues.map(resolve),
+      source: 'local',
+      backendFailed,
+    };
   },
 
   async toggleSupport(id) {
+    const apiUrl = import.meta.env.VITE_API_URL;
+    if (apiUrl) {
+      try {
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${apiUrl}/incidents/${id}/support`, {
+          method: 'POST',
+          headers: { ...headers },
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          return resolve(updated);
+        }
+      } catch {
+        // Fall back to local update
+      }
+    }
+
     const issue = getState().issues.find(i => i.id === id);
     if (!issue) throw new Error('This report is no longer available. Refresh the issue list.');
     const next = new Set(supportedIds);
@@ -89,6 +116,27 @@ export const issueService: IssueService = {
   },
 
   async addFollowUp(issueId: string, text: string, photo?: File): Promise<Issue> {
+    const apiUrl = import.meta.env.VITE_API_URL;
+    if (apiUrl) {
+      try {
+        const headers = await getAuthHeaders();
+        const formData = new FormData();
+        formData.append('text', text);
+        if (photo) formData.append('photo', photo);
+        const res = await fetch(`${apiUrl}/incidents/${issueId}/follow-ups`, {
+          method: 'POST',
+          headers: { ...headers },
+          body: formData,
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          return resolve(updated);
+        }
+      } catch {
+        // Fall back to local update
+      }
+    }
+
     const issue = getState().issues.find(i => i.id === issueId);
     if (!issue) throw new Error('Report not found to add follow-up.');
     if (!text.trim()) throw new Error('Please provide text for the follow-up update.');
@@ -118,6 +166,24 @@ export const issueService: IssueService = {
   },
 
   async submitClarification(issueId: string, answers: Record<string, string>): Promise<Issue> {
+    const apiUrl = import.meta.env.VITE_API_URL;
+    if (apiUrl) {
+      try {
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${apiUrl}/incidents/${issueId}/clarifications`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ answers }),
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          return resolve(updated);
+        }
+      } catch {
+        // Fall back to local update
+      }
+    }
+
     const issue = getState().issues.find(i => i.id === issueId);
     if (!issue) throw new Error('Report not found to clarify.');
 
@@ -126,11 +192,23 @@ export const issueService: IssueService = {
       answer: answers[q.id] ?? q.answer,
     }));
 
+    const clarifiedDetails = Object.entries(answers)
+      .filter(([_, ans]) => Boolean(ans?.trim()))
+      .map(([qid, ans]) => {
+        const qText = issue.clarificationQuestions?.find(q => q.id === qid)?.question;
+        return qText ? `${qText}: ${ans}` : ans;
+      })
+      .join('; ');
+
+    const newObservedCondition = clarifiedDetails
+      ? (issue.observedCondition ? `${issue.observedCondition} [Clarification: ${clarifiedDetails}]` : clarifiedDetails)
+      : issue.observedCondition;
+
     const updatedIssue: Issue = {
       ...issue,
       clarificationQuestions: updatedQuestions,
-      status: 'Under Review',
-      observedCondition: `Clarified by citizen: ${Object.values(answers).filter(Boolean).join(' · ')}`,
+      status: issue.status,
+      observedCondition: newObservedCondition,
     };
 
     updateIssue(updatedIssue);

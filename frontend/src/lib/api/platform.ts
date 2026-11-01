@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
-import type { Coordinates, Category, Issue, ClarificationQuestion } from '../../types/civic';
+import type { Coordinates, Category, Issue } from '../../types/civic';
 import { seedIssues } from '../mocks/issues';
-import { getAuthHeaders } from '../supabase/client';
+import { getAuthHeaders, getCurrentUser } from '../supabase/client';
 
 export interface User {
   id: string;
@@ -31,6 +31,7 @@ export interface ReportDraft {
   audio?: Blob;
   campaignId?: string;
   evidenceConsent: boolean;
+  idempotencyKey?: string;
 }
 
 export interface Contribution {
@@ -98,14 +99,6 @@ seedIssues.forEach(i => {
       : i.category === 'Water' || i.category === 'Drainage' || i.category === 'Water leak'
       ? 'rain-ready'
       : undefined;
-  if (!i.authorityStatus) {
-    i.authorityStatus =
-      i.status === 'Authority Verified'
-        ? 'Official inspection confirmed by municipal engineering team.'
-        : i.status === 'Resolved'
-        ? 'Closed by municipal authorities following field repair.'
-        : 'No official update yet. Pending municipal department inspection.';
-  }
   if (!i.observedCondition) {
     i.observedCondition = `Citizen report: ${i.description || 'Observed by neighborhood contributor'}`;
   }
@@ -228,140 +221,185 @@ export const citizenService: CitizenService = {
   async createReport(draft, onProgress) {
     if (!draft.photo) throw new Error('Add a photograph before submitting.');
 
-    const idempotencyKey = crypto.randomUUID();
+    if (!draft.idempotencyKey) {
+      draft.idempotencyKey = crypto.randomUUID();
+    }
+    const idempotencyKey = draft.idempotencyKey;
     const apiUrl = import.meta.env.VITE_API_URL;
-    let backendSuccess = false;
-    let backendReportId: string | null = null;
-    let backendJobId: string | null = null;
+    const currentUser = await getCurrentUser();
+    const reporterName = currentUser?.email ? currentUser.email.split('@')[0] : demoUser.name;
+    const authorId = currentUser ? currentUser.id : 'me';
 
-    // Requirement E: Sequence 1 to 6
-    // 1. Request authorized private upload from backend (if available)
-    onProgress?.({
-      step: 1,
-      message: 'Requesting authorized upload ticket…',
-      isBackendConnected: Boolean(apiUrl),
-    });
+    if (apiUrl) {
+      onProgress?.({
+        step: 1,
+        message: 'Requesting authorized upload ticket…',
+        isBackendConnected: true,
+      });
 
-    if (apiUrl && !apiUrl.includes('localhost:8000') && !apiUrl.includes('127.0.0.1:8000')) {
-      try {
-        const authHeaders = await getAuthHeaders();
-        const uploadAuthRes = await fetch(`${apiUrl}/uploads/authorize`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Idempotency-Key': idempotencyKey,
-            ...authHeaders,
-          },
-          body: JSON.stringify({
-            files: [
-              { name: draft.photo.name, type: draft.photo.type, size: draft.photo.size },
-              ...(draft.audio ? [{ name: 'voice-note.webm', type: draft.audio.type, size: draft.audio.size }] : []),
-            ],
-          }),
-        });
+      const authHeaders = await getAuthHeaders();
+      const uploadAuthRes = await fetch(`${apiUrl}/uploads/authorize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey,
+          ...authHeaders,
+        },
+        body: JSON.stringify({
+          files: [
+            { name: draft.photo.name, type: draft.photo.type, size: draft.photo.size },
+            ...(draft.audio ? [{ name: 'voice-note.webm', type: draft.audio.type, size: draft.audio.size }] : []),
+          ],
+        }),
+      });
 
-        if (uploadAuthRes.ok) {
-          const authData = await uploadAuthRes.json();
-          // Step 2: Upload selected media
-          onProgress?.({
-            step: 2,
-            message: 'Uploading encrypted evidence media…',
-            isBackendConnected: true,
-          });
+      if (!uploadAuthRes.ok) {
+        throw new Error(`Upload authorization failed (${uploadAuthRes.status}): ${await uploadAuthRes.text()}`);
+      }
 
-          // Step 3: Submit report with evidence IDs
-          onProgress?.({
-            step: 3,
-            message: 'Submitting civic report to backend workflow…',
-            isBackendConnected: true,
-          });
+      const authData = await uploadAuthRes.json();
+      const uploadedEvidenceIds: string[] = [];
 
-          const reportRes = await fetch(`${apiUrl}/reports`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Idempotency-Key': idempotencyKey,
-              ...authHeaders,
-            },
-            body: JSON.stringify({
-              title: draft.title.trim() || `${draft.category} issue near ${draft.location}`,
-              description: draft.description.trim(),
-              category: draft.category,
-              location: draft.location,
-              coordinates: draft.coordinates,
-              campaignId: draft.campaignId,
-              evidenceConsent: draft.evidenceConsent,
-              evidenceIds: authData.evidenceIds || [],
-            }),
-          });
-
-          if (reportRes.ok) {
-            const reportData = await reportRes.json();
-            backendReportId = reportData.report_id;
-            backendJobId = reportData.job_id;
-
-            // Step 4: Received report_id and job_id
-            onProgress?.({
-              step: 4,
-              message: 'Report received. Extraction job queued…',
-              reportId: backendReportId ?? undefined,
-              jobId: backendJobId ?? undefined,
-              isBackendConnected: true,
-            });
-
-            // Step 5: Display processing status
-            onProgress?.({
-              step: 5,
-              message: 'Extracting incident data via AI verification workflow…',
-              reportId: backendReportId ?? undefined,
-              jobId: backendJobId ?? undefined,
-              isBackendConnected: true,
-            });
-
-            backendSuccess = true;
+      const tickets = authData.tickets || authData.files || [];
+      if (Array.isArray(tickets) && tickets.length > 0) {
+        for (const ticket of tickets) {
+          const fileToUpload = ticket.name?.includes('voice') ? draft.audio : draft.photo;
+          if (ticket.uploadUrl && fileToUpload) {
+            try {
+              const putRes = await fetch(ticket.uploadUrl, {
+                method: 'PUT',
+                headers: ticket.headers || { 'Content-Type': fileToUpload.type },
+                body: fileToUpload,
+              });
+              if (putRes.ok && ticket.id) {
+                uploadedEvidenceIds.push(ticket.id);
+              }
+            } catch {
+              // Omit non-uploaded IDs
+            }
+          } else if (ticket.id) {
+            uploadedEvidenceIds.push(ticket.id);
           }
         }
-      } catch {
-        // Truthful handling: backend was unreachable, fall back to robust local offline storage
+      } else if (Array.isArray(authData.evidenceIds)) {
+        uploadedEvidenceIds.push(...authData.evidenceIds);
       }
+
+      onProgress?.({
+        step: 2,
+        message: 'Uploading encrypted evidence media…',
+        isBackendConnected: true,
+      });
+
+      onProgress?.({
+        step: 3,
+        message: 'Submitting civic report to backend workflow…',
+        isBackendConnected: true,
+      });
+
+      const reportRes = await fetch(`${apiUrl}/reports`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey,
+          ...authHeaders,
+        },
+        body: JSON.stringify({
+          title: draft.title.trim() || `${draft.category} issue near ${draft.location}`,
+          description: draft.description.trim(),
+          category: draft.category,
+          location: draft.location,
+          coordinates: draft.coordinates,
+          campaignId: draft.campaignId,
+          evidenceConsent: draft.evidenceConsent,
+          evidenceIds: uploadedEvidenceIds,
+        }),
+      });
+
+      if (!reportRes.ok) {
+        throw new Error(`Report submission failed (${reportRes.status}): ${await reportRes.text()}`);
+      }
+
+      const reportData = await reportRes.json();
+      const backendReportId = reportData.report_id || reportData.id || `CM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+      const backendJobId = reportData.job_id || reportData.jobId;
+
+      onProgress?.({
+        step: 4,
+        message: 'Report received. Extraction job queued…',
+        reportId: backendReportId,
+        jobId: backendJobId ?? undefined,
+        isBackendConnected: true,
+      });
+
+      onProgress?.({
+        step: 5,
+        message: 'Extracting incident data via AI verification workflow…',
+        reportId: backendReportId,
+        jobId: backendJobId ?? undefined,
+        isBackendConnected: true,
+      });
+
+      try {
+        await saveMedia(backendReportId + '-photo', draft.photo);
+        if (draft.audio) await saveMedia(backendReportId + '-audio', draft.audio);
+      } catch {
+        // Local cache error does not duplicate report
+      }
+
+      const issue: Issue = {
+        id: backendReportId,
+        title: reportData.title || draft.title.trim() || `${draft.category} issue near ${draft.location}`,
+        description: reportData.description || draft.description.trim(),
+        category: reportData.category || draft.category,
+        location: reportData.location || draft.location,
+        coordinates: reportData.coordinates || draft.coordinates,
+        photoId: backendReportId + '-photo',
+        audioId: draft.audio ? backendReportId + '-audio' : undefined,
+        evidenceConsent: draft.evidenceConsent,
+        campaignId: draft.campaignId,
+        status: reportData.status || 'Reported',
+        reporter: reportData.reporter || reporterName,
+        authorId: reportData.authorId || authorId,
+        reportedAt: reportData.reportedAt || reportData.created_at || new Date().toISOString(),
+        supporters: reportData.supporters || 0,
+        supported: Boolean(reportData.supported),
+        jobId: backendJobId,
+        authorityStatus: reportData.authorityStatus,
+        observedCondition: reportData.observedCondition || draft.description.trim(),
+        extractionResult: reportData.extractionResult,
+        clarificationQuestions: reportData.clarificationQuestions,
+      };
+
+      onProgress?.({
+        step: 6,
+        message: 'Report received and queued by backend.',
+        reportId: issue.id,
+        jobId: issue.jobId,
+        isBackendConnected: true,
+      });
+
+      commit({ ...state, issues: [issue, ...state.issues] });
+      return issue;
     }
 
-    // Step 2 (Local / Offline storage): persist media in IndexedDB
-    const id = backendReportId ?? `CM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    // Unconfigured backend branch: save report on device only
+    onProgress?.({
+      step: 1,
+      message: 'Saving report locally on this device…',
+      isBackendConnected: false,
+    });
+
+    const id = `CM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     await saveMedia(id + '-photo', draft.photo);
     if (draft.audio) await saveMedia(id + '-audio', draft.audio);
 
-    // Step 6: Formulate extraction result and potential clarification questions
     onProgress?.({
       step: 6,
-      message: 'Extraction complete. Report ready.',
+      message: 'Saved on this device only.',
       reportId: id,
-      jobId: backendJobId ?? `JOB-${id.slice(3)}`,
-      isBackendConnected: backendSuccess,
+      isBackendConnected: false,
     });
-
-    const isGarbage = draft.category === 'Garbage accumulation' || draft.category === 'Waste';
-    const isWater = draft.category === 'Water leak' || draft.category === 'Water';
-
-    const defaultClarifications: ClarificationQuestion[] = isGarbage
-      ? [
-          {
-            id: 'cq-1',
-            question: 'Is the waste accumulation blocking pedestrian access or overflowing onto the road?',
-            type: 'choice',
-            options: ['Blocking pedestrian footpath', 'Overflowing onto road', 'Contained in bin/corner'],
-          },
-        ]
-      : isWater
-      ? [
-          {
-            id: 'cq-2',
-            question: 'Is the leak drinking water (supply pipeline) or rainwater drainage?',
-            type: 'choice',
-            options: ['Clean water supply pipeline', 'Rainwater drainage', 'Sewage line'],
-          },
-        ]
-      : [];
 
     const issue: Issue = {
       id,
@@ -375,24 +413,13 @@ export const citizenService: CitizenService = {
       evidenceConsent: draft.evidenceConsent,
       campaignId: draft.campaignId,
       status: 'Reported',
-      reporter: demoUser.name,
-      authorId: 'me',
+      reporter: reporterName,
+      authorId: authorId,
       reportedAt: new Date().toISOString(),
       supporters: 0,
       supported: false,
-      jobId: backendJobId ?? `JOB-${id.slice(3)}`,
-      // Requirement G: Separate authority status from observed condition
-      authorityStatus: 'No official update yet. Pending municipal department inspection.',
-      observedCondition: draft.description.trim()
-        ? `Citizen observation: ${draft.description.trim()}`
-        : `Verified evidence submitted for ${draft.category.toLowerCase()}`,
-      clarificationQuestions: defaultClarifications,
-      extractionResult: {
-        confidence: 0.94,
-        detectedCategory: draft.category,
-        summary: `Evidence validated at ${draft.coordinates.lat.toFixed(4)}, ${draft.coordinates.lng.toFixed(4)}. Category matched as ${draft.category}.`,
-        suggestedUrgency: isWater || isGarbage ? 'high' : 'medium',
-      },
+      authorityStatus: undefined,
+      observedCondition: draft.description.trim() || 'Saved on this device only',
     };
 
     commit({ ...state, issues: [issue, ...state.issues] });
