@@ -30,6 +30,18 @@ const resolve = (issue: Issue): Issue => {
   };
 };
 
+// Backend-response helper: applies observedCondition and followUps defaults without local supportedIds overlay
+const resolveBackendIssue = (issue: Issue): Issue => {
+  return {
+    ...issue,
+    observedCondition:
+      issue.observedCondition ??
+      (issue.extractionResult?.summary ??
+        `Citizen report: ${issue.description || 'Observed by neighborhood contributor'}`),
+    followUps: issue.followUps ?? [],
+  };
+};
+
 export const issueService: IssueService = {
   async list(signal): Promise<IssueListResult> {
     const apiUrl = import.meta.env.VITE_API_URL;
@@ -44,7 +56,7 @@ export const issueService: IssueService = {
           const data = await res.json();
           if (Array.isArray(data)) {
             return {
-              issues: data.map(resolve),
+              issues: data.map(resolveBackendIssue),
               source: 'api',
               backendFailed: false,
             };
@@ -85,19 +97,16 @@ export const issueService: IssueService = {
   async toggleSupport(id) {
     const apiUrl = import.meta.env.VITE_API_URL;
     if (apiUrl) {
-      try {
-        const headers = await getAuthHeaders();
-        const res = await fetch(`${apiUrl}/incidents/${id}/support`, {
-          method: 'POST',
-          headers: { ...headers },
-        });
-        if (res.ok) {
-          const updated = await res.json();
-          return resolve(updated);
-        }
-      } catch {
-        // Fall back to local update
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${apiUrl}/incidents/${id}/support`, {
+        method: 'POST',
+        headers: { ...headers },
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to toggle support (${res.status}): ${await res.text()}`);
       }
+      const updated = await res.json();
+      return resolveBackendIssue(updated);
     }
 
     const issue = getState().issues.find(i => i.id === id);
@@ -118,23 +127,20 @@ export const issueService: IssueService = {
   async addFollowUp(issueId: string, text: string, photo?: File): Promise<Issue> {
     const apiUrl = import.meta.env.VITE_API_URL;
     if (apiUrl) {
-      try {
-        const headers = await getAuthHeaders();
-        const formData = new FormData();
-        formData.append('text', text);
-        if (photo) formData.append('photo', photo);
-        const res = await fetch(`${apiUrl}/incidents/${issueId}/follow-ups`, {
-          method: 'POST',
-          headers: { ...headers },
-          body: formData,
-        });
-        if (res.ok) {
-          const updated = await res.json();
-          return resolve(updated);
-        }
-      } catch {
-        // Fall back to local update
+      const headers = await getAuthHeaders();
+      const formData = new FormData();
+      formData.append('text', text);
+      if (photo) formData.append('photo', photo);
+      const res = await fetch(`${apiUrl}/incidents/${issueId}/follow-ups`, {
+        method: 'POST',
+        headers: { ...headers },
+        body: formData,
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to submit follow-up (${res.status}): ${await res.text()}`);
       }
+      const updated = await res.json();
+      return resolveBackendIssue(updated);
     }
 
     const issue = getState().issues.find(i => i.id === issueId);
@@ -168,20 +174,17 @@ export const issueService: IssueService = {
   async submitClarification(issueId: string, answers: Record<string, string>): Promise<Issue> {
     const apiUrl = import.meta.env.VITE_API_URL;
     if (apiUrl) {
-      try {
-        const headers = await getAuthHeaders();
-        const res = await fetch(`${apiUrl}/incidents/${issueId}/clarifications`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...headers },
-          body: JSON.stringify({ answers }),
-        });
-        if (res.ok) {
-          const updated = await res.json();
-          return resolve(updated);
-        }
-      } catch {
-        // Fall back to local update
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${apiUrl}/incidents/${issueId}/clarifications`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ answers }),
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to submit clarification (${res.status}): ${await res.text()}`);
       }
+      const updated = await res.json();
+      return resolveBackendIssue(updated);
     }
 
     const issue = getState().issues.find(i => i.id === issueId);

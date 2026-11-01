@@ -208,6 +208,41 @@ export function MapPage() {
         ))}
       </div>
 
+      {/* Notices visible in both map and list views at all breakpoints */}
+      <div className="discovery-notices" style={{ margin: '8px 0 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {listMeta.source === 'local' && (
+          <div
+            className="local-source-notice"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '12px',
+              color: 'var(--muted)',
+            }}
+          >
+            <Icon name="pin" size={14} />
+            <span>Sample data · Not official reports</span>
+          </div>
+        )}
+        {listMeta.backendFailed && (
+          <div
+            role="alert"
+            className="backend-failure-notice"
+            style={{
+              padding: '8px 12px',
+              background: '#faf0e6',
+              border: '1px solid #c49a6c',
+              borderRadius: '6px',
+              fontSize: '12px',
+              color: '#684022',
+            }}
+          >
+            Backend service was unavailable. Showing local sample data.
+          </div>
+        )}
+      </div>
+
       <div className={`discovery-layout view-${view} ${selected ? 'has-selection' : ''}`}>
         <div className="map-column">
           <MapCanvas
@@ -218,26 +253,7 @@ export function MapPage() {
           <div className="map-caption">
             <Icon name="people" size={17} />
             <span>Better streets start with a shared view.</span>
-            {listMeta.source === 'local' && (
-              <span>Sample data · Not official reports</span>
-            )}
           </div>
-          {listMeta.backendFailed && (
-            <div
-              role="status"
-              style={{
-                margin: '8px 12px',
-                padding: '8px 12px',
-                background: '#faf0e6',
-                border: '1px solid #c49a6c',
-                borderRadius: '6px',
-                fontSize: '12px',
-                color: '#684022',
-              }}
-            >
-              Backend service was unavailable. Showing local sample data.
-            </div>
-          )}
         </div>
 
         <aside className="results-panel" aria-label="Nearby issues">

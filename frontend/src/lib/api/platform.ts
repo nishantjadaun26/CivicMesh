@@ -217,6 +217,23 @@ export interface CitizenService {
   toggleCampaign(id: string): Promise<void>;
 }
 
+export function getUserCampaignMemberships(userId: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(`civicmesh.campaign-membership.${userId}`);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function setUserCampaignMemberships(userId: string, ids: Set<string>): void {
+  try {
+    localStorage.setItem(`civicmesh.campaign-membership.${userId}`, JSON.stringify([...ids]));
+  } catch {
+    // browser storage unavailable
+  }
+}
+
 export const citizenService: CitizenService = {
   async createReport(draft, onProgress) {
     if (!draft.photo) throw new Error('Add a photograph before submitting.');
@@ -237,6 +254,11 @@ export const citizenService: CitizenService = {
         isBackendConnected: true,
       });
 
+      const filesToAuthorize: { file: File | Blob; name: string; type: string; size: number }[] = [
+        { file: draft.photo, name: draft.photo.name, type: draft.photo.type, size: draft.photo.size },
+        ...(draft.audio ? [{ file: draft.audio, name: 'voice-note.webm', type: draft.audio.type, size: draft.audio.size }] : []),
+      ];
+
       const authHeaders = await getAuthHeaders();
       const uploadAuthRes = await fetch(`${apiUrl}/uploads/authorize`, {
         method: 'POST',
@@ -246,10 +268,7 @@ export const citizenService: CitizenService = {
           ...authHeaders,
         },
         body: JSON.stringify({
-          files: [
-            { name: draft.photo.name, type: draft.photo.type, size: draft.photo.size },
-            ...(draft.audio ? [{ name: 'voice-note.webm', type: draft.audio.type, size: draft.audio.size }] : []),
-          ],
+          files: filesToAuthorize.map(f => ({ name: f.name, type: f.type, size: f.size })),
         }),
       });
 
@@ -261,28 +280,29 @@ export const citizenService: CitizenService = {
       const uploadedEvidenceIds: string[] = [];
 
       const tickets = authData.tickets || authData.files || [];
-      if (Array.isArray(tickets) && tickets.length > 0) {
-        for (const ticket of tickets) {
-          const fileToUpload = ticket.name?.includes('voice') ? draft.audio : draft.photo;
-          if (ticket.uploadUrl && fileToUpload) {
-            try {
-              const putRes = await fetch(ticket.uploadUrl, {
-                method: 'PUT',
-                headers: ticket.headers || { 'Content-Type': fileToUpload.type },
-                body: fileToUpload,
-              });
-              if (putRes.ok && ticket.id) {
-                uploadedEvidenceIds.push(ticket.id);
-              }
-            } catch {
-              // Omit non-uploaded IDs
-            }
-          } else if (ticket.id) {
-            uploadedEvidenceIds.push(ticket.id);
-          }
+      if (!Array.isArray(tickets) || tickets.length !== filesToAuthorize.length) {
+        throw new Error('Upload authorization returned an invalid or incomplete ticket list.');
+      }
+
+      for (let i = 0; i < tickets.length; i++) {
+        const ticket = tickets[i];
+        const item = filesToAuthorize[i];
+
+        if (!ticket.id || !ticket.uploadUrl || !item.file) {
+          throw new Error(`Incomplete upload ticket at index ${i}. Ticket ID and upload URL are required.`);
         }
-      } else if (Array.isArray(authData.evidenceIds)) {
-        uploadedEvidenceIds.push(...authData.evidenceIds);
+
+        const putRes = await fetch(ticket.uploadUrl, {
+          method: 'PUT',
+          headers: ticket.headers || { 'Content-Type': item.type },
+          body: item.file,
+        });
+
+        if (!putRes.ok) {
+          throw new Error(`Failed to upload media file ${item.name} (${putRes.status}): ${await putRes.text()}`);
+        }
+
+        uploadedEvidenceIds.push(ticket.id);
       }
 
       onProgress?.({
@@ -427,6 +447,18 @@ export const citizenService: CitizenService = {
   },
 
   async toggleCampaign(id) {
+    const currentUser = await getCurrentUser();
+    const userId = currentUser ? currentUser.id : demoUser.id;
+
+    const memberships = getUserCampaignMemberships(userId);
+    const wasJoined = memberships.has(id);
+    if (wasJoined) {
+      memberships.delete(id);
+    } else {
+      memberships.add(id);
+    }
+    setUserCampaignMemberships(userId, memberships);
+
     commit({
       ...state,
       campaigns: state.campaigns.map(c =>

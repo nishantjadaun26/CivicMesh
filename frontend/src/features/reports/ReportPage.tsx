@@ -449,7 +449,7 @@ export function ReportPage() {
               )}
 
               <p className="notice">
-                Submissions are stored securely on this device and synchronized when backend services are connected.
+                Submissions are stored securely on this device only and have not been sent to backend services.
               </p>
             </>
           )}

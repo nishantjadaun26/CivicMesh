@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAppData, demoUser, contributions } from '../../lib/api/platform';
+import { useAppData, demoUser, contributions, getUserCampaignMemberships } from '../../lib/api/platform';
 import { StatusBadge, CategoryIcon } from '../../components/IssueMeta';
 import { useAuth } from '../../lib/supabase/client';
 import { AuthModal } from '../auth/AuthModal';
@@ -12,12 +12,14 @@ export function ProfilePage() {
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const isDemo = !user;
+  const currentUserId = user ? user.id : demoUser.id;
+  const memberships = getUserCampaignMemberships(currentUserId);
+
   const mine = issues
     .filter(i => (user ? i.authorId === user.id : i.authorId === demoUser.id || i.authorId === 'me'))
     .sort((a, b) => Date.parse(b.reportedAt) - Date.parse(a.reportedAt));
-  const joined = isDemo
-    ? campaigns.filter(c => c.joined)
-    : campaigns.filter(c => c.followers?.includes(user.id));
+
+  const joined = campaigns.filter(c => memberships.has(c.id) || (isDemo && c.joined));
   const myContributions = isDemo ? contributions : [];
   const points = myContributions.reduce((n, c) => n + c.points, 0);
 
@@ -127,12 +129,17 @@ export function ProfilePage() {
                 <span>
                   <strong>{i.title}</strong>
                   <small>
-                    {i.location} · {new Date(i.reportedAt).toLocaleDateString('en-IN')}
+                    {i.location} · {new Date(i.reportedAt).toLocaleDateString('en-IN')} · <span style={{ color: 'var(--accent)', fontWeight: 600 }}>Device-only</span>
                   </small>
                 </span>
                 <StatusBadge status={i.status} />
               </Link>
             ))}
+            {mine.length > 0 && (
+              <p className="help" style={{ fontSize: '11px', color: 'var(--muted)', margin: '10px 0 0' }}>
+                Reports listed above are stored on this device only and are not account-synchronized.
+              </p>
+            )}
             {!mine.length && (
               <p>
                 No reports yet. <Link to="/report">Report a local issue.</Link>
