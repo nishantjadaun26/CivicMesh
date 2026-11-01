@@ -3,10 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { Issue } from '../../types/civic';
 import { request, uploadEvidence, type ApiFollowUp } from '../../lib/api/client';
 import { useAuth } from '../../lib/supabase/client';
+import { WorkflowData } from '../../components/WorkflowData';
 
 interface Props { issue: Issue; onClose: () => void; }
 
-export function IssuePreview({ issue, onClose }: Props) {
+function PreviewContents({ issue, onClose }: Props) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [text, setText] = useState('');
@@ -39,6 +40,7 @@ export function IssuePreview({ issue, onClose }: Props) {
     <h3>Observed condition</h3><p>{issue.observedCondition}</p>
     <h3>Authority status</h3><p>{issue.authorityStatus === 'unknown' ? 'No verified official update recorded.' : issue.authorityStatus}</p>
     <p>Approved public record. Private citizen identity and evidence are not published.</p>
+    {issue.timeline.length > 0 && <><h3>Recorded authority updates</h3><WorkflowData value={issue.timeline} /></>}
     {!user ? <Link to="/profile">Sign in to submit follow-up evidence</Link> : <form onSubmit={submit}>
       <h3>Add a private follow-up</h3>
       <p>The assessment uses only your authorized evidence. Without an available baseline it must report insufficient evidence.</p>
@@ -49,4 +51,9 @@ export function IssuePreview({ issue, onClose }: Props) {
       {error && <p role="alert">{error}</p>}
     </form>}
   </section>;
+}
+
+export function IssuePreview(props: Props) {
+  const { user } = useAuth();
+  return <PreviewContents key={user?.id ?? 'guest'} {...props} />;
 }

@@ -1,3 +1,5 @@
+> Historical prototype concept. The current pilot supports garbage accumulation and water leaks only. See [the integration audit](../docs/integration-audit.md) for implemented behavior and limits.
+
 # CivicMesh app design
 
 The approved brand overrides generic palette defaults: parchment `#faf5ec`, cream `#fffdf9`, brown ink `#3c2b20`, burnt orange `#be501c`, golden Report action `#f6c25b`, muted earth-toned semantic indicators. Nunito is self-hosted with its OFL license.

@@ -37,6 +37,8 @@ class Text(HTMLParser):
 
 
 async def ingest(arguments):
+    if any(not value.strip() or len(value) > 255 for value in (arguments.authority, arguments.jurisdiction, arguments.title)):
+        raise ValueError("Authority, jurisdiction and title must contain 1–255 characters")
     if not arguments.verified_official:
         raise ValueError(
             "An owner must verify the domain and passage before using --verified-official"

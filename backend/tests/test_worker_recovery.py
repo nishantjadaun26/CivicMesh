@@ -96,3 +96,30 @@ async def test_crash_lease_consumes_failure_budget_and_never_restarts_unboundedl
     job = await db_session.get(Job, UUID(created["job_id"]))
     assert job.status == "failed" and job.failures == 3
     assert provider.calls == 0
+
+
+async def test_lost_checkpoint_does_not_silently_restart_a_reviewed_report(
+    client, db_session, tmp_path
+):
+    owner = uuid4()
+    created = (
+        await client.post(
+            "/reports",
+            headers=auth(owner),
+            json={
+                "text": "Discarded bags cover the pavement.",
+                "location": {"latitude": 1, "longitude": 2, "confirmed": True},
+            },
+        )
+    ).json()
+    provider = TestProvider()
+    async with sqlite_checkpointer(tmp_path / "original.sqlite") as saver:
+        await work(saver, provider, db_session)
+    db_session.expire_all()
+    await answer(client, owner, created["job_id"], {"approved": True})
+    async with sqlite_checkpointer(tmp_path / "missing.sqlite") as saver:
+        await work(saver, provider, db_session)
+    db_session.expire_all()
+    job = (await client.get(f"/jobs/{created['job_id']}", headers=auth(owner))).json()
+    assert job["status"] == "failed" and job["error_code"] == "checkpoint_unavailable"
+    assert provider.calls == 1

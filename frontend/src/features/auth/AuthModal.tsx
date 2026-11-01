@@ -20,6 +20,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    if (!isOpen) { setPassword(''); setEmail(''); setMessage(''); setError(''); }
+  }, [isOpen]);
+
+  useEffect(() => {
     if (!isOpen) return;
 
     // Save previous active element before modal steals focus

@@ -39,6 +39,8 @@ test('report location requires explicit confirmation and is not prefilled with a
 test('unconfigured submission never shows a fabricated success', async ({ page }) => {
   await page.goto('/report');
   await page.getByLabel('Location name').fill('Isolated test location');
+  await page.getByLabel('Latitude', { exact: true }).fill('1');
+  await page.getByLabel('Longitude', { exact: true }).fill('2');
   await page.getByRole('checkbox', { name: 'I have confirmed the latitude and longitude.' }).check();
   await page.getByRole('button', { name: 'Confirm location', exact: true }).click();
   await page.locator('input[type=file]').first().setInputFiles({ name: 'isolated.png', mimeType: 'image/png',
@@ -49,6 +51,20 @@ test('unconfigured submission never shows a fabricated success', async ({ page }
   await page.getByRole('button', { name: 'Submit report', exact: true }).click();
   await expect(page.getByText('Backend service is not configured. Your report has not been submitted.')).toBeVisible();
   await expect(page.getByRole('heading', { name: /Report received/ })).toHaveCount(0);
+});
+
+test('neutral viewport coordinates require an explicit selection, including zero', async ({ page }) => {
+  await page.goto('/report');
+  await page.getByLabel('Location name').fill('Isolated explicit-zero test');
+  await page.getByRole('checkbox', { name: 'I have confirmed the latitude and longitude.' }).check();
+  await page.getByRole('button', { name: 'Confirm location', exact: true }).click();
+  await expect(page.getByText('Add a location name and confirm the coordinates.')).toBeVisible();
+  await expect(page.getByLabel('Latitude', { exact: true })).toHaveValue('');
+  await page.getByLabel('Latitude', { exact: true }).fill('0');
+  await page.getByLabel('Longitude', { exact: true }).fill('0');
+  await page.getByRole('checkbox', { name: 'I have confirmed the latitude and longitude.' }).check();
+  await page.getByRole('button', { name: 'Confirm location', exact: true }).click();
+  await expect(page.getByLabel('Photograph (required)')).toBeVisible();
 });
 
 test('empty service states remain usable at mobile and desktop widths', async ({ page }) => {

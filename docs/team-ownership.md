@@ -9,5 +9,6 @@
 Coordinate future shared schemas, API contracts, dependency files, migrations,
 deployment and CI changes before editing. No teammate GitHub usernames are assumed.
 
-This setup contains folders and review configuration only. Each teammate implements
-their module through small PRs into main, with CodeRabbit feedback and human review.
+The original module PRs are merged. Cross-module integration is reviewed in
+`feat/project-integration` with the owner's authorization. Continue subsequent
+module work through small PRs, with CodeRabbit feedback and human review.

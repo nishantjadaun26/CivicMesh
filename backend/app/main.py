@@ -10,11 +10,12 @@ from backend.app.api.routes.reports import router as reports_router
 from backend.app.api.routes.uploads import router as uploads_router
 from backend.app.core.config import get_settings
 from backend.app.core.errors import AppError, ErrorResponse
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException
 
 logger = logging.getLogger("civicmesh.api")
 settings = get_settings()

@@ -4,6 +4,7 @@ import argparse
 import asyncio
 
 from backend.app.core.config import get_settings
+from backend.app.core.tls import checkpoint_tls
 
 
 async def apply():
@@ -20,11 +21,7 @@ async def apply():
         prepare_threshold=0,
         row_factory=dict_row,
         options="-c search_path=civicmesh_checkpoints,public",
-        **(
-            {"sslmode": "verify-full", "sslrootcert": "system"}
-            if settings.ENVIRONMENT == "production"
-            else {}
-        ),
+        **checkpoint_tls(settings),
     ) as conn:
         await conn.execute("CREATE SCHEMA IF NOT EXISTS civicmesh_checkpoints")
         await conn.execute(

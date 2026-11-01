@@ -1,5 +1,10 @@
 # CivicMesh AI workflow
 
+The merged integration calls this package through `backend.app.worker` using
+authorized Storage/database adapters, persisted jobs and private checkpoints.
+See [the integration audit](../../../docs/integration-audit.md) and
+[deployment runbook](../../../docs/deployment-runbook.md) for the application.
+
 Branch: `feat/ai-workflow`. This package implements the AI side of report processing
 and follow-up assessment. Frontend, authentication, storage access, matching retrieval,
 official-source ingestion and worker/job persistence remain backend/frontend responsibilities.

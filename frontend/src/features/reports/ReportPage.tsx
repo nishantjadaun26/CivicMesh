@@ -13,6 +13,7 @@ function ReportForm() {
   const { campaigns } = useAppData();
   const [step, setStep] = useState(0);
   const [locationConfirmed, setLocationConfirmed] = useState(false);
+  const [locationSelected, setLocationSelected] = useState(false);
   const [draft, setDraft] = useState<ReportDraft>({
     title: '',
     description: '',
@@ -36,7 +37,7 @@ function ReportForm() {
 
   function advance() {
     setError('');
-    if (step === 0 && (!draft.location.trim() || !locationConfirmed)) {
+    if (step === 0 && (!draft.location.trim() || !locationConfirmed || !locationSelected)) {
       setError('Add a location name and confirm the coordinates.');
       return;
     }
@@ -106,8 +107,9 @@ function ReportForm() {
           {step === 0 && (
             <>
               <LocationPicker
-                value={draft.coordinates}
-                onChange={coordinates => { setDraft({ ...draft, coordinates }); setLocationConfirmed(false); }}
+                value={locationSelected ? draft.coordinates : null}
+                onChange={coordinates => { setDraft({ ...draft, coordinates }); setLocationSelected(true); setLocationConfirmed(false); }}
+                onIncomplete={() => { setLocationSelected(false); setLocationConfirmed(false); }}
               />
               <label>
                 Location name

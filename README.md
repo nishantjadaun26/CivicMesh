@@ -1,8 +1,14 @@
 # CivicMesh
 
 Three-person hackathon project with separate citizen frontend, backend and AI modules.
-The modules have their own checks; connecting them into a working application is the
-next integration milestone. See [merge review and integration handoff](docs/merge-review.md).
+The React/Vite frontend now connects to FastAPI uploads, private reports and persistent
+AI worker jobs. Clarification and human reviews resume durable LangGraph workflows.
+Real staging credentials and owner-run deployment verification are still required.
+
+- [Architecture, audit and readiness](docs/integration-audit.md)
+- [Environment variables](docs/environment.md)
+- [Ordered deployment and operations runbook](docs/deployment-runbook.md)
+- [Verification commands and results](docs/verification.md)
 
 ```text
 frontend/src/
@@ -27,8 +33,9 @@ docs/
 .github/workflows/
 ```
 
-The backend exports `contracts/openapi.json`. The frontend must still be adapted to
-that contract. See [frontend setup](frontend/README.md) and [AI setup](backend/app/ai/README.md).
+The backend exports `contracts/openapi.json`; frontend API types are generated from
+it. See [frontend setup](frontend/README.md), [backend setup](backend/README.md) and
+[AI package setup](backend/app/ai/README.md).
 
 | Teammate | Branch | Module |
 |---|---|---|

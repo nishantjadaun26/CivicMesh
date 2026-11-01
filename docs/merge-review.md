@@ -1,5 +1,8 @@
 # Module review and integration handoff
 
+Historical pre-integration review. The subsequent implementation and current
+readiness are documented in [integration-audit.md](integration-audit.md).
+
 Reviewed on 2026-11-01: AI PR #1, backend PR #2 and frontend PR #3.
 These branches can coexist without merge conflicts. Merging the modules does not
 establish an operational end-to-end application.

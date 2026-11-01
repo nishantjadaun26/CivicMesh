@@ -159,6 +159,11 @@ class Worker:
         except AIError as error:
             if error.code != "workflow_not_found":
                 raise
+            if job.checkpoint_id is not None or (job.pending_action or {}).get("resume_pending"):
+                raise AIError(
+                    "checkpoint_unavailable",
+                    "Saved workflow state is unavailable; operator recovery is required.",
+                ) from None
             if job.report_id:
                 ids = list(
                     (

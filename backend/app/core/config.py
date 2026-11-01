@@ -17,6 +17,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
+        hide_input_in_errors=True,
     )
 
     # Environment
@@ -31,12 +32,13 @@ class Settings(BaseSettings):
     )
 
     # Database
-    DATABASE_URL: str = Field(default="postgresql+asyncpg://postgres:postgres@localhost:5432/civicmesh")
+    DATABASE_URL: str = Field(default="postgresql+asyncpg://postgres:postgres@localhost:5432/civicmesh", repr=False)
+    DATABASE_SSL_ROOT_CERT: str = ""
 
     # Supabase Auth
     SUPABASE_URL: str = Field(default="https://localhost.supabase.co")
-    SUPABASE_JWT_SECRET: str = Field(default="")
-    SUPABASE_SERVICE_ROLE_KEY: str = Field(default="dev-supabase-service-role-key-placeholder")
+    SUPABASE_JWT_SECRET: str = Field(default="", repr=False)
+    SUPABASE_SERVICE_ROLE_KEY: str = Field(default="dev-supabase-service-role-key-placeholder", repr=False)
 
     # Storage Buckets
     STORAGE_EVIDENCE_BUCKET: str = "civicmesh-evidence"
@@ -48,13 +50,13 @@ class Settings(BaseSettings):
     PILOT_RADIUS_METERS: float = Field(default=5000.0, gt=0)
 
     # Worker & AI
-    GEMINI_API_KEY: str = Field(default="")
+    GEMINI_API_KEY: str = Field(default="", repr=False)
     GEMINI_MODEL: str = Field(default="")
     WORKER_POLL_INTERVAL_SECONDS: float = Field(default=2.0, ge=0.1, le=60)
     WORKER_MAX_RETRIES: int = Field(default=3, ge=1, le=5)
     WORKER_JOB_TIMEOUT_SECONDS: int = Field(default=300, ge=30, le=600)
     WORKER_LEASE_SECONDS: int = Field(default=600, ge=60, le=1200)
-    CHECKPOINT_DATABASE_URL: str = ""
+    CHECKPOINT_DATABASE_URL: str = Field(default="", repr=False)
     LOCAL_CHECKPOINT_PATH: str = ".cache/checkpoints.sqlite"
 
     @field_validator("CORS_ORIGINS", mode="before")
@@ -81,9 +83,23 @@ class Settings(BaseSettings):
         for origin in origins:
             parsed = urlsplit(origin)
             if (parsed.scheme not in ("http", "https") or not parsed.netloc
-                    or parsed.path or parsed.query or parsed.fragment or "*" in origin):
+                    or parsed.path or parsed.query or parsed.fragment or parsed.username or parsed.password or "*" in origin):
                 raise ValueError("CORS origins must be explicit HTTP(S) origins")
         return origins
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def validate_database_url(cls, value):
+        from sqlalchemy.engine import make_url
+        from sqlalchemy.exc import ArgumentError
+        try:
+            url = make_url(value)
+            if url.drivername not in {"postgresql+asyncpg", "sqlite+aiosqlite"} or not url.database:
+                raise ValueError
+            _ = url.port
+        except (ArgumentError, ValueError):
+            raise ValueError("DATABASE_URL must be a valid async PostgreSQL or development SQLite URL") from None
+        return value
 
     @model_validator(mode="after")
     def validate_production_configuration(self) -> "Settings":

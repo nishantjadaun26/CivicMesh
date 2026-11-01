@@ -18,13 +18,7 @@ export function CategoryIcon({ category }: { category: Category }) {
 export function StatusBadge({ status }: { status: IssueStatus }) {
   return (
     <span
-      className={`status-badge ${
-        status === 'Reported'
-          ? 'reported'
-          : status === 'Under Review'
-          ? 'confirmed'
-          : 'resolved'
-      }`}
+      className="status-badge reported"
     >
       <span aria-hidden="true" />
       {status}
