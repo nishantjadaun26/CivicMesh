@@ -24,11 +24,15 @@ test('rapid double-click on campaign join produces only one membership change', 
   const btn = page.getByRole('button', { name: 'Join A safer walk to school campaign' });
   await expect(btn).toBeVisible();
 
-  // Rapid double click
-  await Promise.all([
-    btn.click(),
-    btn.click().catch(() => {}), // second click ignored or button disabled
-  ]);
+  // Dispatch both clicks within a single page evaluation
+  await page.evaluate(() => {
+    const button = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Join A safer walk to school campaign"]'
+    );
+    if (!button) throw new Error('Button not found');
+    button.click();
+    button.click();
+  });
 
   // Successfully toggles once to Leave campaign
   const leaveBtn = page.getByRole('button', { name: 'Leave A safer walk to school campaign' });
@@ -39,14 +43,14 @@ test('rapid double-click on campaign join produces only one membership change', 
 test('storage failure shows error, preserves membership, and clears pending', async ({ page }) => {
   await page.goto('/campaigns/safer-streets');
 
-  // Inject failure for localStorage.setItem on campaign membership key
+  // Inject failure for Storage.prototype.setItem on campaign membership key
   await page.evaluate(() => {
-    const origSetItem = localStorage.setItem.bind(localStorage);
-    localStorage.setItem = (k: string, v: string) => {
+    const origSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (this: Storage, k: string, v: string) {
       if (k.startsWith('civicmesh.campaign-membership')) {
         throw new Error('QuotaExceededError');
       }
-      return origSetItem(k, v);
+      return origSetItem.call(this, k, v);
     };
   });
 
