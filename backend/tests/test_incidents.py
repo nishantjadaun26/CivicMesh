@@ -100,5 +100,5 @@ async def test_submit_follow_up(client: AsyncClient, db_session: AsyncSession):
     assert detail.status_code == 200
     d_json = detail.json()
     assert d_json["authority_status"] == "unknown"  # Authority status is preserved
-    assert len(d_json["timeline"]) == 1
-    assert d_json["timeline"][0]["event_type"] == "citizen_observation"
+    # Citizen follow-up text is private until an explicit moderation flow exists.
+    assert d_json["timeline"] == []

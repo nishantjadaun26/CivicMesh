@@ -192,8 +192,11 @@ async def test_submit_clarification_answers(client: AsyncClient, db_session: Asy
     )
     assert clarify_res.status_code == 200
     updated = clarify_res.json()
-    assert updated["category"] == "water_leak"
-    assert updated["latitude"] == 28.6140
-    assert updated["location_confirmed"] is True
-    assert "[Clarification]" in updated["text"]
+    assert updated["category"] is None
+    assert updated["latitude"] is None
+    assert updated["location_confirmed"] is False
+    assert updated["text"] == "Water leaking near the bus stop"
+    await db_session.refresh(job)
+    assert job.pending_action["reply"]["text"] == "Opposite the blue bakery"
+    assert job.pending_action["resume_pending"] is True
     assert updated["status"] == "pending"

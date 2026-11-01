@@ -226,7 +226,17 @@ CREATE POLICY jobs_owner_select ON public.jobs FOR SELECT USING (owner_id = auth
 
 -- Status Events: Public for approved public incidents, or owner-only for private reports
 CREATE POLICY status_events_select ON public.status_events FOR SELECT USING (
-    (incident_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.incidents i WHERE i.id = incident_id AND i.is_public = TRUE))
-    OR
     (report_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.reports r WHERE r.id = report_id AND r.owner_id = auth.uid()))
 );
+
+
+-- Citizen evidence is private. Signed upload preparation is backend-only.
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('civicmesh-evidence', 'civicmesh-evidence', false, 20971520,
+  ARRAY['image/jpeg','image/png','image/webp','audio/webm','audio/ogg','audio/mp4','audio/mpeg','audio/wav'])
+ON CONFLICT (id) DO UPDATE SET public = false;
+CREATE POLICY evidence_storage_owner_read ON storage.objects FOR SELECT TO authenticated
+USING (bucket_id = 'civicmesh-evidence' AND EXISTS (
+  SELECT 1 FROM public.evidence e WHERE e.storage_path = name
+    AND e.owner_id = auth.uid() AND e.verified = true
+));

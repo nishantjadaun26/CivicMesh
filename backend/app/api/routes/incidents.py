@@ -78,6 +78,7 @@ async def get_incident_detail(
     events_stmt = (
         select(StatusEvent)
         .where(StatusEvent.incident_id == incident_id)
+        .where(StatusEvent.event_type == "authority_update")
         .order_by(StatusEvent.created_at.asc())
     )
     events_res = await db.execute(events_stmt)
@@ -145,7 +146,7 @@ async def submit_follow_up(
     stmt = select(Incident).where(Incident.id == incident_id)
     res = await db.execute(stmt)
     inc = res.scalar_one_or_none()
-    if not inc:
+    if not inc or not inc.is_public:
         raise NotFoundError("Incident not found")
 
     # Bind follow-up evidence to this incident

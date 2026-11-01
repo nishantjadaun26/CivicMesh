@@ -130,21 +130,15 @@ async def submit_clarification_answers(
     if pending_interrupt != request.interrupt_id:
         raise ConflictError("Stale or invalid interrupt ID.")
 
-    if request.category:
-        report.category = request.category
-    if request.location:
-        report.latitude = request.location.latitude
-        report.longitude = request.location.longitude
-        report.location_confirmed = True
-    if request.text:
-        report.text = f"{report.text}\n[Clarification]: {request.text}".strip()
-
+    # Preserve the original report. The worker consumes this validated reply using
+    # the saved checkpoint/action instead of starting extraction from mutated input.
     report.status = "pending"
-
-    # Re-queue the validated job for processing: clear pending action and reset attempts
     job.status = "pending"
-    job.pending_action = None
-    job.attempts = 0
+    job.pending_action = {
+        **(job.pending_action or {}),
+        "resume_pending": True,
+        "reply": request.model_dump(mode="json", exclude={"checkpoint_id", "interrupt_id"}),
+    }
 
     await db.commit()
     await db.refresh(report)

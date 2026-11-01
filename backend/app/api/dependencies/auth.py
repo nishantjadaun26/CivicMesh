@@ -4,8 +4,13 @@ from typing import Annotated
 from uuid import UUID
 
 import jwt
-from backend.app.core.config import Settings, get_settings
-from backend.app.core.errors import ForbiddenError, NotFoundError, UnauthorizedError
+from backend.app.core.config import PLACEHOLDERS, Settings, get_settings
+from backend.app.core.errors import (
+    ForbiddenError,
+    NotFoundError,
+    ServiceUnavailableError,
+    UnauthorizedError,
+)
 from backend.app.database.models import Job, Report
 from backend.app.database.session import get_db
 from fastapi import Depends, Header
@@ -32,24 +37,31 @@ async def get_current_user_id(
     token = parts[1]
     cfg = settings or get_settings()
 
+    if (not cfg.SUPABASE_JWT_SECRET or len(cfg.SUPABASE_JWT_SECRET.strip()) < 32
+            or any(value in cfg.SUPABASE_JWT_SECRET.lower() for value in PLACEHOLDERS)):
+        raise ServiceUnavailableError("Authentication is not configured.")
+
     try:
         # Decode and verify Supabase JWT
         # Supabase default tokens use HS256 with project JWT secret
         payload = jwt.decode(
             token,
             cfg.SUPABASE_JWT_SECRET,
-            algorithms=["HS256", "RS256"],
+            algorithms=["HS256"],
             audience="authenticated",
-            options={"verify_aud": False},  # Support both audience formats
+            issuer=f"{cfg.SUPABASE_URL.rstrip('/')}/auth/v1",
+            options={"require": ["exp", "sub", "aud", "iss"]},
         )
+        if payload.get("role") != "authenticated":
+            raise UnauthorizedError("A citizen access token is required.")
         user_id_str = payload.get("sub")
         if not user_id_str:
             raise UnauthorizedError("Token missing 'sub' claim")
         return UUID(user_id_str)
     except jwt.ExpiredSignatureError:
         raise UnauthorizedError("Session expired. Please sign in again.") from None
-    except jwt.InvalidTokenError as e:
-        raise UnauthorizedError(f"Invalid authentication token: {str(e)}") from None
+    except jwt.InvalidTokenError:
+        raise UnauthorizedError("Invalid authentication token") from None
     except ValueError:
         raise UnauthorizedError("Token 'sub' claim is not a valid UUID") from None
 

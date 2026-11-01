@@ -41,7 +41,7 @@ app.add_middleware(
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
     """Attach unique request_id to each HTTP request and response header."""
-    request_id = request.headers.get("X-Request-ID", f"req-{uuid.uuid4().hex[:12]}")
+    request_id = f"req-{uuid.uuid4().hex[:12]}"
     request.state.request_id = request_id
 
     response = await call_next(request)
@@ -107,7 +107,7 @@ async def http_error_handler(request: Request, exc: HTTPException):
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     request_id = getattr(request.state, "request_id", "unknown")
-    logger.exception("Unhandled server error [request_id=%s]: %s", request_id, exc)
+    logger.error("Unhandled server error [request_id=%s]: %s", request_id, type(exc).__name__)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=ErrorResponse(

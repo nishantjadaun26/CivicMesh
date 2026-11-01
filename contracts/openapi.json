@@ -1395,7 +1395,7 @@
           "expires_in_seconds": {
             "type": "integer",
             "title": "Expires In Seconds",
-            "default": 3600
+            "default": 7200
           }
         },
         "additionalProperties": false,

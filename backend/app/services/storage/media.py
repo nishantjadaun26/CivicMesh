@@ -1,11 +1,17 @@
 """Private storage media handling and evidence verification."""
 
-import logging
+from hashlib import sha256
+from urllib.parse import quote, urljoin, urlsplit
 from uuid import UUID, uuid4
 
 import httpx
-from backend.app.core.config import get_settings
-from backend.app.core.errors import ForbiddenError, NotFoundError, ValidationError
+from backend.app.core.config import PLACEHOLDERS, get_settings
+from backend.app.core.errors import (
+    ForbiddenError,
+    NotFoundError,
+    ServiceUnavailableError,
+    ValidationError,
+)
 from backend.app.database.models import Evidence
 from backend.app.schemas.uploads import (
     ALLOWED_MIME_TYPES,
@@ -17,13 +23,14 @@ from backend.app.schemas.uploads import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger("civicmesh.storage")
 settings = get_settings()
 
 MIME_EXTENSION_MAP: dict[str, str] = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
     "image/webp": ".webp",
+    "audio/webm": ".webm",
+    "audio/ogg": ".ogg",
     "audio/mp4": ".m4a",
     "audio/mpeg": ".mp3",
     "audio/wav": ".wav",
@@ -47,76 +54,88 @@ class StorageService:
         if request.content_type.startswith("audio/") and request.file_size_bytes > MAX_AUDIO_SIZE_BYTES:
             raise ValidationError("Audio exceeds size limit.")
 
+        key = settings.SUPABASE_SERVICE_ROLE_KEY
+        if not key or any(value in key.lower() for value in PLACEHOLDERS):
+            raise ServiceUnavailableError("Private storage signing is not configured.")
+
         evidence_id = uuid4()
         ext = MIME_EXTENSION_MAP.get(request.content_type, ".bin")
-        safe_filename = f"{uuid4().hex}{ext}"
-        storage_path = f"evidence/{owner_id}/{evidence_id}/{safe_filename}"
+        storage_path = f"evidence/{owner_id}/{evidence_id}/{uuid4().hex}{ext}"
+        base = settings.SUPABASE_URL.rstrip("/")
+        sign_url = f"{base}/storage/v1/object/upload/sign/{settings.STORAGE_EVIDENCE_BUCKET}/{storage_path}"
+        try:
+            async with httpx.AsyncClient(timeout=10, follow_redirects=False, trust_env=False) as client:
+                response = await client.post(sign_url,
+                    headers={"Authorization": f"Bearer {key}", "apikey": key}, json={"upsert": False})
+            response.raise_for_status()
+            data = response.json()
+            if data.get("url"):
+                path = data["url"]
+                upload_url = urljoin(f"{base}/storage/v1/", path.lstrip("/") if not path.startswith("/storage/v1/") else path)
+            elif data.get("token"):
+                upload_url = f"{sign_url}?token={quote(data['token'], safe='')}"
+            else:
+                raise ValueError("No signed destination")
+            parsed, project = urlsplit(upload_url), urlsplit(base)
+            if (parsed.scheme != "https" or parsed.netloc != project.netloc
+                    or not parsed.path.startswith("/storage/v1/object/upload/sign/")
+                    or not parsed.query):
+                raise ValueError("Invalid signed destination")
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            raise ServiceUnavailableError("Private storage could not prepare an upload.") from None
 
-        evidence = Evidence(
-            id=evidence_id,
-            owner_id=owner_id,
-            storage_bucket=settings.STORAGE_EVIDENCE_BUCKET,
-            storage_path=storage_path,
-            mime_type=request.content_type,
-            file_size_bytes=request.file_size_bytes,
-            verified=False,
-        )
+        evidence = Evidence(id=evidence_id, owner_id=owner_id,
+            storage_bucket=settings.STORAGE_EVIDENCE_BUCKET, storage_path=storage_path,
+            mime_type=request.content_type, file_size_bytes=request.file_size_bytes, verified=False)
         db.add(evidence)
         await db.commit()
+        return UploadPrepareResponse(evidence_id=evidence_id, upload_url=upload_url,
+            storage_path=storage_path, expires_in_seconds=7200)
 
-        # Request signed expiring upload URL from Storage API if service role is configured
-        upload_url = None
-        expires_in = 3600
-        if not any(p in settings.SUPABASE_SERVICE_ROLE_KEY.lower() for p in ["placeholder", "dev-"]):
-            try:
-                async with httpx.AsyncClient(timeout=5.0) as client:
-                    sign_url = (
-                        f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/upload/sign/"
-                        f"{settings.STORAGE_EVIDENCE_BUCKET}/{storage_path}"
-                    )
-                    resp = await client.post(
-                        sign_url,
-                        headers={"Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}"},
-                        json={"expiresIn": expires_in},
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        if data.get("url"):
-                            rel_url = data["url"]
-                            if rel_url.startswith("http://") or rel_url.startswith("https://"):
-                                upload_url = rel_url
-                            elif rel_url.startswith("/storage/v1"):
-                                upload_url = f"{settings.SUPABASE_URL.rstrip('/')}{rel_url}"
-                            elif rel_url.startswith("/"):
-                                upload_url = f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1{rel_url}"
-                            else:
-                                upload_url = f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/{rel_url}"
-                        elif data.get("token"):
-                            token = data["token"]
-                            upload_url = (
-                                f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/upload/sign/"
-                                f"{settings.STORAGE_EVIDENCE_BUCKET}/{storage_path}?token={token}"
-                            )
-                    else:
-                        logger.warning(
-                            "Supabase storage signing returned non-200 status: %d",
-                            resp.status_code,
-                        )
-            except Exception as exc:
-                logger.warning("Supabase storage signing failed: %s", type(exc).__name__)
-
-        if not upload_url:
-            upload_url = (
-                f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/"
-                f"{settings.STORAGE_EVIDENCE_BUCKET}/{storage_path}"
-            )
-
-        return UploadPrepareResponse(
-            evidence_id=evidence_id,
-            upload_url=upload_url,
-            storage_path=storage_path,
-            expires_in_seconds=expires_in,
-        )
+    @staticmethod
+    async def verify_uploaded_object(item: Evidence) -> None:
+        """Verify actual bounded object bytes before marking owner media as bindable."""
+        key = settings.SUPABASE_SERVICE_ROLE_KEY
+        if not key or any(value in key.lower() for value in PLACEHOLDERS):
+            raise ServiceUnavailableError("Private storage verification is not configured.")
+        url = (f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/authenticated/"
+               f"{quote(item.storage_bucket, safe='')}/{quote(item.storage_path, safe='/')}")
+        limit = MAX_IMAGE_SIZE_BYTES if item.mime_type.startswith("image/") else MAX_AUDIO_SIZE_BYTES
+        try:
+            async with httpx.AsyncClient(timeout=10, follow_redirects=False, trust_env=False) as client:
+                async with client.stream("GET", url, headers={"Authorization": f"Bearer {key}", "apikey": key}) as response:
+                    if response.status_code == 404:
+                        raise ValidationError("Evidence upload is not complete.")
+                    response.raise_for_status()
+                    if response.headers.get("content-type", "").split(";")[0].strip() != item.mime_type:
+                        raise ValidationError("Stored evidence MIME type does not match its ticket.")
+                    chunks, size = [], 0
+                    async for chunk in response.aiter_bytes():
+                        size += len(chunk)
+                        if size > limit:
+                            raise ValidationError("Stored evidence exceeds its size limit.")
+                        chunks.append(chunk)
+        except httpx.HTTPError:
+            raise ServiceUnavailableError("Private storage verification is unavailable.") from None
+        content = b"".join(chunks)
+        if len(content) != item.file_size_bytes:
+            raise ValidationError("Stored evidence size does not match its ticket.")
+        signatures = {
+            "image/jpeg": content.startswith(b"\xff\xd8\xff"),
+            "image/png": content.startswith(b"\x89PNG\r\n\x1a\n"),
+            "image/webp": content[:4] == b"RIFF" and content[8:12] == b"WEBP",
+            "audio/webm": content.startswith(b"\x1aE\xdf\xa3"),
+            "audio/ogg": content.startswith(b"OggS"),
+            "audio/mp4": content[4:8] == b"ftyp",
+            "audio/wav": content[:4] == b"RIFF" and content[8:12] == b"WAVE",
+            "audio/mpeg": content.startswith(b"ID3") or (len(content) >= 2 and content[0] == 255 and content[1] & 224 == 224),
+        }
+        if not signatures.get(item.mime_type, False):
+            raise ValidationError("Stored evidence signature does not match its MIME type.")
+        digest = sha256(content).hexdigest()
+        if item.sha256_hash and item.sha256_hash != digest:
+            raise ValidationError("Stored evidence changed after verification.")
+        item.sha256_hash, item.verified = digest, True
 
     @staticmethod
     async def verify_and_bind_evidence(
@@ -154,6 +173,8 @@ class StorageService:
                 raise ValidationError(f"Evidence item {item.id} is already bound to report {item.report_id}.")
             if incident_id is not None and item.incident_id is not None and item.incident_id != incident_id:
                 raise ValidationError(f"Evidence item {item.id} is already bound to incident {item.incident_id}.")
+
+            await StorageService.verify_uploaded_object(item)
 
             if report_id is not None:
                 item.report_id = report_id

@@ -2,7 +2,7 @@
 
 from backend.app.core.config import Settings, get_settings
 from backend.app.database.session import get_db
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ router = APIRouter(tags=["Health"])
     description="Reports API liveness, configuration validity, and database connectivity.",
 )
 async def health_check(
+    request: Request,
     settings: Settings = Depends(get_settings),
     db: AsyncSession = Depends(get_db),
 ):
@@ -30,6 +31,7 @@ async def health_check(
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
+                "request_id": request.state.request_id,
                 "code": "service_unavailable",
                 "message": "Production environment has unconfigured placeholder credentials",
                 "details": details,
@@ -39,11 +41,12 @@ async def health_check(
     try:
         await db.execute(text("SELECT 1"))
         details["database"] = "connected"
-    except Exception as e:
-        details["database"] = f"unreachable: {str(e)}"
+    except Exception:
+        details["database"] = "unreachable"
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
+                "request_id": request.state.request_id,
                 "code": "database_unavailable",
                 "message": "Database is unreachable or uninitialized",
                 "details": details,
@@ -52,5 +55,7 @@ async def health_check(
 
     return {
         "status": "healthy",
+        "live": True,
+        "ready": False,  # Worker/checkpoint integration is not operational yet.
         "details": details,
     }

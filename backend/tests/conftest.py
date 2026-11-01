@@ -46,6 +46,7 @@ def create_test_token(user_id: UUID, expired: bool = False) -> str:
         "sub": str(user_id),
         "aud": "authenticated",
         "role": "authenticated",
+        "iss": f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1",
         "exp": exp,
     }
     return jwt.encode(payload, settings.SUPABASE_JWT_SECRET, algorithm="HS256")
@@ -65,7 +66,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+async def client(db_session: AsyncSession, monkeypatch) -> AsyncGenerator[AsyncClient, None]:
     """Test HTTP client with overridden DB dependency."""
     async def override_get_db():
         yield db_session
@@ -73,6 +74,25 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_settings] = get_test_settings
 
+    # Isolated Storage transport: no real account, production calls or application fallback.
+    import httpx
+    from backend.app.database.models import Evidence
+    from backend.app.services.storage import media
+    from sqlalchemy import select
+    native = httpx.AsyncClient
+    monkeypatch.setattr(media, "settings", get_test_settings().model_copy(update={
+        "SUPABASE_SERVICE_ROLE_KEY": "isolated-storage-key-with-no-real-account-access"}))
+    async def handle_storage(request):
+        if request.method == "POST":
+            return httpx.Response(200, json={"url": request.url.path + "?token=isolated-test-ticket"})
+        path = request.url.path.split("/civicmesh-evidence/", 1)[-1]
+        evidence = (await db_session.execute(select(Evidence).where(Evidence.storage_path == path))).scalar_one_or_none()
+        if evidence is None:
+            return httpx.Response(404)
+        headers = {"image/jpeg": b"\xff\xd8\xff", "image/png": b"\x89PNG\r\n\x1a\n"}
+        content = headers.get(evidence.mime_type, b"ID3").ljust(evidence.file_size_bytes, b"x")
+        return httpx.Response(200, content=content, headers={"content-type": evidence.mime_type})
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: native(transport=httpx.MockTransport(handle_storage), **kwargs))
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as c:
         yield c

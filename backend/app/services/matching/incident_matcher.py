@@ -66,6 +66,7 @@ class IncidentMatcher:
         stmt = (
             select(Incident)
             .where(Incident.category == category)
+            .where(Incident.is_public.is_(True))
             .where(Incident.created_at >= cutoff)
         )
         result = await db.execute(stmt)

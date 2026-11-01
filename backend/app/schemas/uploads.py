@@ -55,7 +55,7 @@ class UploadPrepareResponse(BaseSchema):
     evidence_id: UUID
     upload_url: str
     storage_path: str
-    expires_in_seconds: int = 3600
+    expires_in_seconds: int = 7200
 
 
 class EvidenceResponse(BaseSchema):

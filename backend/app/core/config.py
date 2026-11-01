@@ -42,14 +42,14 @@ class Settings(BaseSettings):
     STORAGE_DOCUMENTS_BUCKET: str = "civicmesh-sources"
 
     # Pilot Locality
-    PILOT_LOCALITY_NAME: str = "Pilot-Ward-1"
-    PILOT_LATITUDE: float = Field(default=28.6139, ge=-90.0, le=90.0)
-    PILOT_LONGITUDE: float = Field(default=77.2090, ge=-180.0, le=180.0)
+    PILOT_LOCALITY_NAME: str = ""
+    PILOT_LATITUDE: float | None = Field(default=None, ge=-90.0, le=90.0)
+    PILOT_LONGITUDE: float | None = Field(default=None, ge=-180.0, le=180.0)
     PILOT_RADIUS_METERS: float = Field(default=5000.0, gt=0)
 
     # Worker & AI
     GEMINI_API_KEY: str = Field(default="")
-    GEMINI_MODEL: str = Field(default="gemini-2.5-flash")
+    GEMINI_MODEL: str = Field(default="")
     WORKER_POLL_INTERVAL_SECONDS: float = 2.0
     WORKER_MAX_RETRIES: int = 3
 
@@ -69,6 +69,17 @@ class Settings(BaseSettings):
         if isinstance(value, list):
             return [str(origin).strip() for origin in value if str(origin).strip()]
         return value
+
+    @field_validator("CORS_ORIGINS")
+    @classmethod
+    def validate_explicit_origins(cls, origins):
+        from urllib.parse import urlsplit
+        for origin in origins:
+            parsed = urlsplit(origin)
+            if (parsed.scheme not in ("http", "https") or not parsed.netloc
+                    or parsed.path or parsed.query or parsed.fragment or "*" in origin):
+                raise ValueError("CORS origins must be explicit HTTP(S) origins")
+        return origins
 
     @model_validator(mode="after")
     def validate_production_configuration(self) -> "Settings":

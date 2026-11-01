@@ -1,5 +1,6 @@
 """Verified official source retrieval with strict Anti-SSRF and DNS-rebinding protection."""
 
+import asyncio
 import ipaddress
 import socket
 import urllib.parse
@@ -8,7 +9,7 @@ from uuid import UUID
 
 import httpx
 from backend.app.core.config import get_settings
-from backend.app.core.errors import ValidationError
+from backend.app.core.errors import ServiceUnavailableError, ValidationError
 from backend.app.database.models import Authority, SourceChunk, SourceDocument
 from backend.app.schemas.common import Category, ConfirmedLocation
 from sqlalchemy import select
@@ -36,12 +37,12 @@ def is_safe_ip(ip_str: str) -> bool:
     """Validate that an IP is globally routable and not private or reserved."""
     try:
         ip = ipaddress.ip_address(ip_str)
-        return not any(ip in net for net in BLOCKED_IP_NETWORKS) and not ip.is_private and not ip.is_loopback
+        return ip.is_global and not ip.is_multicast and not any(ip in net for net in BLOCKED_IP_NETWORKS)
     except ValueError:
         return False
 
 
-def validate_url_safe(url: str) -> str:
+def validated_target(url: str) -> tuple[urllib.parse.SplitResult, str]:
     """Validate URL scheme and resolve target host to verify it is not an internal service (Anti-SSRF)."""
     parsed = urllib.parse.urlsplit(url)
     if parsed.scheme.lower() not in ("http", "https"):
@@ -54,7 +55,9 @@ def validate_url_safe(url: str) -> str:
         raise ValidationError("URL must not contain credentials.")
 
     try:
-        addr_info = socket.getaddrinfo(parsed.hostname, parsed.port or 443, proto=socket.IPPROTO_TCP)
+        addr_info = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80), proto=socket.IPPROTO_TCP)
+        if not addr_info:
+            raise ValidationError("Target host has no addresses.")
         for _, _, _, _, sockaddr in addr_info:
             ip_str = sockaddr[0]
             if not is_safe_ip(ip_str):
@@ -62,6 +65,12 @@ def validate_url_safe(url: str) -> str:
     except socket.gaierror as e:
         raise ValidationError(f"Failed to resolve hostname '{parsed.hostname}': {str(e)}") from None
 
+    return parsed, addr_info[0][4][0]
+
+
+def validate_url_safe(url: str) -> str:
+    """Validate URL and every resolved address without making an HTTP request."""
+    validated_target(url)
     return url
 
 
@@ -70,21 +79,31 @@ class SafeFetcher:
 
     @staticmethod
     async def fetch_page(url: str, timeout_seconds: float = 10.0) -> str:
-        current_url = validate_url_safe(url)
-        max_redirects = 3
-
-        async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=False) as client:
-            for _ in range(max_redirects):
-                response = await client.get(current_url)
-                if response.is_redirect:
-                    next_url = response.headers.get("location")
-                    if not next_url:
-                        raise ValidationError("Redirect response missing Location header.")
-                    current_url = validate_url_safe(urllib.parse.urljoin(current_url, next_url))
-                else:
+        current_url = url
+        async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=False, trust_env=False) as client:
+            for _ in range(4):
+                parsed, address = await asyncio.to_thread(validated_target, current_url)
+                # Connect to the vetted address, retaining the original HTTP Host and TLS SNI.
+                # No second DNS lookup can redirect the connection into a private service.
+                host = f"[{address}]" if ":" in address else address
+                authority = f"{host}:{parsed.port}" if parsed.port else host
+                pinned_url = urllib.parse.urlunsplit(parsed._replace(netloc=authority, fragment=""))
+                async with client.stream("GET", pinned_url, headers={"Host": parsed.netloc},
+                    extensions={"sni_hostname": parsed.hostname}) as response:
+                    if response.is_redirect:
+                        next_url = response.headers.get("location")
+                        if not next_url:
+                            raise ValidationError("Redirect response missing Location header.")
+                        current_url = urllib.parse.urljoin(current_url, next_url)
+                        continue
                     response.raise_for_status()
-                    return response.text
-
+                    chunks, size = [], 0
+                    async for chunk in response.aiter_bytes():
+                        size += len(chunk)
+                        if size > 4 * 1024 * 1024:
+                            raise ValidationError("Official source exceeds the 4 MiB fetch limit.")
+                        chunks.append(chunk)
+                    return b"".join(chunks).decode("utf-8", errors="replace")
         raise ValidationError("Too many redirects during safe fetch.")
 
 
@@ -134,15 +153,15 @@ class OfficialSourceService:
         limit: int = 10,
     ) -> list[OfficialSourcePassage]:
         """Retrieve verified authority document passages relevant to the report."""
+        if not settings.PILOT_LOCALITY_NAME.strip():
+            raise ServiceUnavailableError("Pilot locality is not configured.")
         category_term = "garbage" if category == "garbage" else "water"
         stmt = (
             select(SourceChunk, SourceDocument, Authority)
             .join(SourceDocument, SourceChunk.document_id == SourceDocument.id)
             .join(Authority, SourceDocument.authority_id == Authority.id)
             .where(
-                Authority.jurisdiction.ilike(f"%{settings.PILOT_LOCALITY_NAME}%")
-                | Authority.jurisdiction.ilike("%pilot%")
-                | Authority.jurisdiction.ilike("%all%")
+                Authority.jurisdiction == settings.PILOT_LOCALITY_NAME
             )
             .where(
                 SourceDocument.title.ilike(f"%{category_term}%")
