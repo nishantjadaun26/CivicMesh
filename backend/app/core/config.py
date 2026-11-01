@@ -1,10 +1,14 @@
 """Application configuration and validation."""
 
+import json
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+MIN_SECRET_LENGTH = 32
+PLACEHOLDERS = ("dev-", "placeholder", "your-", "localhost")
 
 
 class Settings(BaseSettings):
@@ -20,8 +24,10 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     REQUEST_TIMEOUT_SECONDS: int = 30
 
-    # CORS
-    CORS_ORIGINS: list[str] = Field(default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"])
+    # CORS - bypass JSON decoding so parse_cors_origins receives comma-separated string
+    CORS_ORIGINS: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"]
+    )
 
     # Database
     DATABASE_URL: str = Field(default="postgresql+asyncpg://postgres:postgres@localhost:5432/civicmesh")
@@ -51,16 +57,43 @@ class Settings(BaseSettings):
     @classmethod
     def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
         if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
+            stripped = value.strip()
+            if stripped.startswith("[") and stripped.endswith("]"):
+                try:
+                    parsed = json.loads(stripped)
+                    if isinstance(parsed, list):
+                        return [str(o).strip() for o in parsed if str(o).strip()]
+                except json.JSONDecodeError:
+                    pass
+            return [origin.strip() for origin in stripped.split(",") if origin.strip()]
+        if isinstance(value, list):
+            return [str(origin).strip() for origin in value if str(origin).strip()]
         return value
+
+    @model_validator(mode="after")
+    def validate_production_configuration(self) -> "Settings":
+        if self.ENVIRONMENT == "production":
+            for name, secret in [
+                ("SUPABASE_JWT_SECRET", self.SUPABASE_JWT_SECRET),
+                ("SUPABASE_SERVICE_ROLE_KEY", self.SUPABASE_SERVICE_ROLE_KEY),
+            ]:
+                if not secret or len(secret.strip()) < MIN_SECRET_LENGTH:
+                    raise ValueError(
+                        f"{name} must be at least {MIN_SECRET_LENGTH} characters in production."
+                    )
+                if any(p in secret.lower() for p in PLACEHOLDERS):
+                    raise ValueError(
+                        f"{name} contains prohibited placeholder in production."
+                    )
+        return self
 
     def is_configured_for_production(self) -> bool:
         """Check if production environment has required non-default secrets."""
-        if self.ENVIRONMENT == "production":
-            placeholders = ["dev-", "placeholder", "your-", "localhost"]
-            for secret in [self.SUPABASE_JWT_SECRET, self.SUPABASE_SERVICE_ROLE_KEY]:
-                if any(p in secret.lower() for p in placeholders):
-                    return False
+        for secret in [self.SUPABASE_JWT_SECRET, self.SUPABASE_SERVICE_ROLE_KEY]:
+            if not secret or len(secret.strip()) < MIN_SECRET_LENGTH:
+                return False
+            if any(p in secret.lower() for p in PLACEHOLDERS):
+                return False
         return True
 
 

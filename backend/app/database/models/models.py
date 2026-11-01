@@ -127,7 +127,7 @@ class Report(Base, TimestampMixin):
     location_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)
     extraction_result: Mapped[dict[str, Any] | None] = mapped_column(JsonType, nullable=True)
-    idempotency_key: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     location = mapped_column(PointGeometry, nullable=True)
 
@@ -136,6 +136,7 @@ class Report(Base, TimestampMixin):
     incident_associations: Mapped[list["IncidentReport"]] = relationship(back_populates="report", cascade="all, delete-orphan")
 
     __table_args__ = (
+        UniqueConstraint("owner_id", "idempotency_key", name="uq_reports_owner_idempotency_key"),
         Index("idx_reports_owner", "owner_id"),
         Index("idx_reports_status", "status"),
     )

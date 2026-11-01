@@ -87,9 +87,10 @@ CREATE TABLE IF NOT EXISTS public.reports (
     location_confirmed BOOLEAN NOT NULL DEFAULT FALSE,
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'waiting_for_input', 'processed', 'failed')),
     extraction_result JSONB,
-    idempotency_key TEXT UNIQUE,
+    idempotency_key TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (owner_id, idempotency_key)
 );
 
 CREATE INDEX IF NOT EXISTS idx_reports_owner ON public.reports(owner_id);
@@ -214,15 +215,11 @@ CREATE POLICY source_chunks_select_all ON public.source_chunks FOR SELECT USING 
 -- Incidents: Anyone can read approved public incidents
 CREATE POLICY incidents_public_select ON public.incidents FOR SELECT USING (is_public = TRUE);
 
--- Reports: Private to the authenticated report owner
+-- Reports: Private to the authenticated report owner (reads only; all writes mediated by backend API)
 CREATE POLICY reports_owner_select ON public.reports FOR SELECT USING (owner_id = auth.uid());
-CREATE POLICY reports_owner_insert ON public.reports FOR INSERT WITH CHECK (owner_id = auth.uid());
-CREATE POLICY reports_owner_update ON public.reports FOR UPDATE USING (owner_id = auth.uid());
 
--- Evidence: Private to the authenticated evidence owner
+-- Evidence: Private to the authenticated evidence owner (reads only; creation and binding mediated by backend API)
 CREATE POLICY evidence_owner_select ON public.evidence FOR SELECT USING (owner_id = auth.uid());
-CREATE POLICY evidence_owner_insert ON public.evidence FOR INSERT WITH CHECK (owner_id = auth.uid());
-CREATE POLICY evidence_owner_delete ON public.evidence FOR DELETE USING (owner_id = auth.uid());
 
 -- Jobs: Private to the authenticated job owner
 CREATE POLICY jobs_owner_select ON public.jobs FOR SELECT USING (owner_id = auth.uid());

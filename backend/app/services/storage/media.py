@@ -2,6 +2,7 @@
 
 from uuid import UUID, uuid4
 
+import httpx
 from backend.app.core.config import get_settings
 from backend.app.core.errors import ForbiddenError, NotFoundError, ValidationError
 from backend.app.database.models import Evidence
@@ -50,26 +51,62 @@ class StorageService:
         db.add(evidence)
         await db.commit()
 
-        # Upload destination (Presigned Supabase Storage URL or application upload target)
-        upload_url = f"{settings.SUPABASE_URL}/storage/v1/object/{settings.STORAGE_EVIDENCE_BUCKET}/{storage_path}"
+        # Request signed expiring upload URL from Storage API if service role is configured
+        upload_url = None
+        expires_in = 3600
+        if not any(p in settings.SUPABASE_SERVICE_ROLE_KEY.lower() for p in ["placeholder", "dev-"]):
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    sign_url = (
+                        f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/upload/sign/"
+                        f"{settings.STORAGE_EVIDENCE_BUCKET}/{storage_path}"
+                    )
+                    resp = await client.post(
+                        sign_url,
+                        headers={"Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}"},
+                        json={"expiresIn": expires_in},
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        token = data.get("token") or data.get("url")
+                        if token:
+                            upload_url = (
+                                f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/upload/sign/"
+                                f"{settings.STORAGE_EVIDENCE_BUCKET}/{storage_path}?token={token}"
+                            )
+            except Exception:
+                pass
+
+        if not upload_url:
+            upload_url = (
+                f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/"
+                f"{settings.STORAGE_EVIDENCE_BUCKET}/{storage_path}"
+            )
 
         return UploadPrepareResponse(
             evidence_id=evidence_id,
             upload_url=upload_url,
             storage_path=storage_path,
-            expires_in_seconds=3600,
+            expires_in_seconds=expires_in,
         )
 
     @staticmethod
     async def verify_and_bind_evidence(
         owner_id: UUID,
         evidence_ids: list[UUID],
-        report_id: UUID,
         db: AsyncSession,
+        report_id: UUID | None = None,
+        incident_id: UUID | None = None,
     ) -> list[Evidence]:
-        """Verify ownership and bind evidence items to the given report."""
+        """Verify ownership and bind evidence items to report and/or incident.
+
+        Flushes changes rather than committing so the caller can control transaction atomicity.
+        """
         if not evidence_ids:
             return []
+
+        if report_id is None and incident_id is None:
+            raise ValidationError("Evidence must be bound to a report or an incident.")
 
         query = select(Evidence).where(Evidence.id.in_(evidence_ids))
         result = await db.execute(query)
@@ -83,11 +120,18 @@ class StorageService:
         for item in items:
             if item.owner_id != owner_id:
                 raise ForbiddenError(f"Evidence item {item.id} is not owned by the authenticated citizen.")
-            if item.report_id is not None and item.report_id != report_id:
+
+            # Reject if already bound to another report or another incident
+            if report_id is not None and item.report_id is not None and item.report_id != report_id:
                 raise ValidationError(f"Evidence item {item.id} is already bound to report {item.report_id}.")
+            if incident_id is not None and item.incident_id is not None and item.incident_id != incident_id:
+                raise ValidationError(f"Evidence item {item.id} is already bound to incident {item.incident_id}.")
 
-            item.report_id = report_id
-            item.verified = True
+            if report_id is not None:
+                item.report_id = report_id
+            if incident_id is not None:
+                item.incident_id = incident_id
 
-        await db.commit()
+        # Flush to register bindings in session without prematurely committing caller's transaction
+        await db.flush()
         return items

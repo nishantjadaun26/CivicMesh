@@ -28,4 +28,6 @@ jobs:
       - name: Run test suite
         run: .venv/bin/pytest -v backend/tests
       - name: Verify OpenAPI contract export
-        run: .venv/bin/python scripts/export_openapi.py
+        run: |
+          .venv/bin/python scripts/export_openapi.py
+          git diff --exit-code contracts/openapi.json

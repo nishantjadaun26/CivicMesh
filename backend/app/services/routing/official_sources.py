@@ -134,10 +134,21 @@ class OfficialSourceService:
         limit: int = 10,
     ) -> list[OfficialSourcePassage]:
         """Retrieve verified authority document passages relevant to the report."""
+        category_term = "garbage" if category == "garbage" else "water"
         stmt = (
             select(SourceChunk, SourceDocument, Authority)
             .join(SourceDocument, SourceChunk.document_id == SourceDocument.id)
             .join(Authority, SourceDocument.authority_id == Authority.id)
+            .where(
+                Authority.jurisdiction.ilike(f"%{settings.PILOT_LOCALITY_NAME}%")
+                | Authority.jurisdiction.ilike("%pilot%")
+                | Authority.jurisdiction.ilike("%all%")
+            )
+            .where(
+                SourceDocument.title.ilike(f"%{category_term}%")
+                | SourceChunk.content.ilike(f"%{category_term}%")
+            )
+            .order_by(SourceDocument.retrieved_at.desc(), SourceChunk.chunk_index.asc())
             .limit(limit)
         )
         result = await db.execute(stmt)

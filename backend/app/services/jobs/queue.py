@@ -4,11 +4,11 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from backend.app.core.config import get_settings
-from backend.app.core.errors import ConflictError
 from backend.app.database.models import Job, Profile, Report
 from backend.app.schemas.reports import ReportCreateRequest
 from backend.app.services.storage.media import StorageService
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 settings = get_settings()
@@ -25,28 +25,51 @@ class JobQueueService:
     ) -> tuple[Report, Job]:
         """Atomically persist report, bind evidence, and enqueue processing job.
 
-        If idempotency_key is provided and already exists, returns existing report and job.
+        If idempotency_key is provided and already exists for this owner, returns existing report and job.
         """
         if idempotency_key:
-            stmt = select(Report).where(Report.idempotency_key == idempotency_key)
+            stmt = select(Report).where(
+                Report.owner_id == owner_id,
+                Report.idempotency_key == idempotency_key,
+            )
             result = await db.execute(stmt)
             existing_report = result.scalar_one_or_none()
             if existing_report:
-                if existing_report.owner_id != owner_id:
-                    raise ConflictError("Idempotency key collision with another user's submission.")
-                # Fetch existing job
-                job_stmt = select(Job).where(Job.report_id == existing_report.id)
-                job_res = await db.execute(job_stmt)
-                existing_job = job_res.scalar_one_or_none()
+                job_stmt = (
+                    select(Job)
+                    .where(Job.report_id == existing_report.id)
+                    .order_by(Job.created_at.desc())
+                    .limit(1)
+                )
+                existing_job = (await db.execute(job_stmt)).scalar_one_or_none()
                 if existing_job:
                     return existing_report, existing_job
 
-        # Ensure profile exists for FK constraint
+                # Existing report has no job: create one and commit
+                new_job = Job(
+                    id=uuid4(),
+                    owner_id=owner_id,
+                    report_id=existing_report.id,
+                    kind="report",
+                    status="pending",
+                    attempts=0,
+                    max_attempts=settings.WORKER_MAX_RETRIES,
+                )
+                db.add(new_job)
+                await db.commit()
+                await db.refresh(new_job)
+                return existing_report, new_job
+
+        # Ensure profile exists for FK constraint (race-safe)
         profile = await db.get(Profile, owner_id)
         if not profile:
-            profile = Profile(id=owner_id)
-            db.add(profile)
-            await db.flush()
+            try:
+                async with db.begin_nested():
+                    db.add(Profile(id=owner_id))
+                    await db.flush()
+            except IntegrityError:
+                # Concurrent insert already created profile
+                pass
 
         report_id = uuid4()
         job_id = uuid4()
@@ -66,16 +89,50 @@ class JobQueueService:
             status="pending",
             idempotency_key=idempotency_key,
         )
-        db.add(report)
-        await db.flush()
 
-        # Bind evidence items
+        try:
+            async with db.begin_nested():
+                db.add(report)
+                await db.flush()
+        except IntegrityError:
+            # Concurrent submission with same (owner_id, idempotency_key)
+            if idempotency_key:
+                stmt = select(Report).where(
+                    Report.owner_id == owner_id,
+                    Report.idempotency_key == idempotency_key,
+                )
+                existing_report = (await db.execute(stmt)).scalar_one()
+                job_stmt = (
+                    select(Job)
+                    .where(Job.report_id == existing_report.id)
+                    .order_by(Job.created_at.desc())
+                    .limit(1)
+                )
+                existing_job = (await db.execute(job_stmt)).scalar_one_or_none()
+                if existing_job:
+                    return existing_report, existing_job
+                new_job = Job(
+                    id=uuid4(),
+                    owner_id=owner_id,
+                    report_id=existing_report.id,
+                    kind="report",
+                    status="pending",
+                    attempts=0,
+                    max_attempts=settings.WORKER_MAX_RETRIES,
+                )
+                db.add(new_job)
+                await db.commit()
+                await db.refresh(new_job)
+                return existing_report, new_job
+            raise
+
+        # Bind evidence items (flushes within current transaction)
         if request.evidence_ids:
             await StorageService.verify_and_bind_evidence(
                 owner_id=owner_id,
                 evidence_ids=request.evidence_ids,
-                report_id=report_id,
                 db=db,
+                report_id=report_id,
             )
 
         job = Job(

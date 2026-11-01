@@ -83,15 +83,37 @@ async def get_incident_detail(
     events_res = await db.execute(events_stmt)
     events = events_res.scalars().all()
 
-    timeline = [
-        StatusEventResponse(
-            id=ev.id,
-            event_type=ev.event_type,
-            payload=ev.payload,
-            created_at=ev.created_at,
+    APPROVED_EVENT_TYPES = {"citizen_observation", "ai_assessment", "authority_update"}
+
+    timeline = []
+    for ev in events:
+        if ev.event_type not in APPROVED_EVENT_TYPES:
+            continue
+
+        raw = ev.payload if isinstance(ev.payload, dict) else {}
+        sanitized_payload = {}
+        if ev.event_type == "citizen_observation":
+            if "description" in raw and raw["description"]:
+                sanitized_payload["description"] = raw["description"]
+            if "same_location_confirmed" in raw:
+                sanitized_payload["same_location_confirmed"] = bool(raw["same_location_confirmed"])
+        elif ev.event_type == "ai_assessment":
+            for key in ["outcome", "rationale", "condition"]:
+                if key in raw:
+                    sanitized_payload[key] = raw[key]
+        elif ev.event_type == "authority_update":
+            for key in ["official_status", "authority_name", "update_summary"]:
+                if key in raw:
+                    sanitized_payload[key] = raw[key]
+
+        timeline.append(
+            StatusEventResponse(
+                id=ev.id,
+                event_type=ev.event_type,
+                payload=sanitized_payload,
+                created_at=ev.created_at,
+            )
         )
-        for ev in events
-    ]
 
     return IncidentDetailResponse(
         id=inc.id,
@@ -126,24 +148,23 @@ async def submit_follow_up(
     if not inc:
         raise NotFoundError("Incident not found")
 
-    # Bind follow-up evidence
+    # Bind follow-up evidence to this incident
     if request.evidence_ids:
         await StorageService.verify_and_bind_evidence(
             owner_id=user_id,
             evidence_ids=request.evidence_ids,
-            report_id=None,  # Follow-up evidence bound to incident
             db=db,
+            incident_id=incident_id,
         )
 
     follow_up_id = uuid4()
-    # Record citizen observation status event
+    # Record citizen observation status event (evidence binding & event commit together)
     event = StatusEvent(
         id=follow_up_id,
         incident_id=incident_id,
         event_type="citizen_observation",
         payload={
             "description": request.text,
-            "evidence_ids": [str(e) for e in request.evidence_ids],
             "same_location_confirmed": request.same_location_confirmed,
         },
     )

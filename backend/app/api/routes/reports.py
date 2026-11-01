@@ -4,6 +4,7 @@ from typing import Annotated
 from uuid import UUID
 
 from backend.app.api.dependencies.auth import get_current_user_id, require_report_owner
+from backend.app.core.errors import ConflictError
 from backend.app.database.models import Evidence, Job, Report
 from backend.app.database.session import get_db
 from backend.app.schemas.reports import (
@@ -107,6 +108,22 @@ async def submit_clarification_answers(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ReportResponse:
     """Submit citizen clarification answers and re-enqueue processing to resume workflow."""
+    # Validate that report and job are in waiting_for_input state
+    job_query = select(Job).where(Job.report_id == report.id).order_by(Job.created_at.desc()).limit(1)
+    job_res = await db.execute(job_query)
+    job = job_res.scalar_one_or_none()
+
+    if not job or job.status != "waiting_for_input" or report.status != "waiting_for_input":
+        raise ConflictError("Report is not waiting for clarification input.")
+
+    # Validate checkpoint_id and interrupt_id match stored workflow action
+    if job.checkpoint_id != request.checkpoint_id:
+        raise ConflictError("Stale or invalid checkpoint ID.")
+
+    pending_interrupt = (job.pending_action or {}).get("interrupt_id")
+    if pending_interrupt != request.interrupt_id:
+        raise ConflictError("Stale or invalid interrupt ID.")
+
     if request.category:
         report.category = request.category
     if request.location:
@@ -118,13 +135,10 @@ async def submit_clarification_answers(
 
     report.status = "pending"
 
-    # Re-queue the latest job for processing resumption
-    job_query = select(Job).where(Job.report_id == report.id).order_by(Job.created_at.desc()).limit(1)
-    job_res = await db.execute(job_query)
-    job = job_res.scalar_one_or_none()
-    if job:
-        job.status = "pending"
-        job.checkpoint_id = request.checkpoint_id
+    # Re-queue the validated job for processing: clear pending action and reset attempts
+    job.status = "pending"
+    job.pending_action = None
+    job.attempts = 0
 
     await db.commit()
     await db.refresh(report)

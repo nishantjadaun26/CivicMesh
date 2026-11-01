@@ -23,7 +23,7 @@ class ConfirmedLocation(BaseSchema):
     """Explicit coordinate values confirmed by citizen."""
     latitude: float = Field(ge=-90.0, le=90.0, allow_inf_nan=False, description="WGS84 latitude")
     longitude: float = Field(ge=-180.0, le=180.0, allow_inf_nan=False, description="WGS84 longitude")
-    confirmed: Literal[True] = Field(default=True, description="Explicit manual confirmation flag")
+    confirmed: Literal[True] = Field(description="Explicit manual confirmation flag")
 
 
 class PaginationParams(BaseSchema):

@@ -11,6 +11,7 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,
     echo=settings.LOG_LEVEL.upper() == "DEBUG",
+    hide_parameters=True,
 )
 
 AsyncSessionLocal = async_sessionmaker(

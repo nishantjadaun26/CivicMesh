@@ -13,6 +13,7 @@ from backend.app.core.errors import AppError, ErrorResponse
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger("civicmesh.api")
@@ -73,7 +74,7 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
         loc = " -> ".join(str(loc_part) for loc_part in err.get("loc", []))
         errors.append(f"{loc}: {err.get('msg')}")
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content=ErrorResponse(
             code="validation_error",
             message="Request schema validation failed",
@@ -125,3 +126,50 @@ app.include_router(uploads_router)
 app.include_router(reports_router)
 app.include_router(jobs_router)
 app.include_router(incidents_router)
+
+
+# -----------------------------------------------------------------------------
+# Custom OpenAPI with Standardized ErrorResponse
+# -----------------------------------------------------------------------------
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+
+    components = openapi_schema.setdefault("components", {}).setdefault("schemas", {})
+    components["ErrorResponse"] = ErrorResponse.model_json_schema()
+    components.pop("HTTPValidationError", None)
+    components.pop("ValidationError", None)
+
+    error_ref = {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+
+    for path, path_item in openapi_schema.get("paths", {}).items():
+        for method, op in path_item.items():
+            if not isinstance(op, dict) or "responses" not in op:
+                continue
+
+            params = op.get("parameters", [])
+            has_auth = any(p.get("name") == "authorization" for p in params)
+            has_id = "{" in path
+
+            if has_auth:
+                op["responses"]["401"] = {"description": "Unauthorized", "content": error_ref}
+                op["responses"]["403"] = {"description": "Forbidden", "content": error_ref}
+            if has_id:
+                op["responses"]["404"] = {"description": "Not Found", "content": error_ref}
+            if "answers" in path or op.get("operationId", "").startswith("create_"):
+                op["responses"]["409"] = {"description": "Conflict with current state", "content": error_ref}
+            if "422" in op["responses"]:
+                op["responses"]["422"] = {"description": "Validation Error", "content": error_ref}
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi

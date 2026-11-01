@@ -1,10 +1,12 @@
 """Tests for report creation, idempotency, persistence, and clarification answers."""
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
+from backend.app.database.models import Job, Report
 from backend.tests.conftest import create_test_token
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
@@ -121,20 +123,58 @@ async def test_report_validation_empty_submission(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_submit_clarification_answers(client: AsyncClient):
+async def test_submit_clarification_answers(client: AsyncClient, db_session: AsyncSession):
     """Submitting clarification answers updates the report and re-enqueues the job."""
     user_id = uuid4()
     token = create_test_token(user_id)
 
-    # Create initial report missing confirmed location
+    # Create initial report missing confirmed location (starts in pending)
     create_res = await client.post(
         "/reports",
         headers={"Authorization": f"Bearer {token}"},
         json={"text": "Water leaking near the bus stop"},
     )
-    report_id = create_res.json()["id"]
+    assert create_res.status_code == 201
+    report_id = UUID(create_res.json()["id"])
+    job_id = UUID(create_res.json()["job_id"])
 
-    # Submit clarification answer with confirmed location
+    # 1. Submitting answer for a pending job must be rejected with 409 Conflict
+    pending_attempt = await client.post(
+        f"/reports/{report_id}/answers",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "checkpoint_id": "chk-12345",
+            "interrupt_id": "intr-abcde",
+            "text": "Opposite the bakery",
+        },
+    )
+    assert pending_attempt.status_code == 409
+    assert pending_attempt.json()["code"] == "conflict"
+
+    # 2. Put report and job into waiting_for_input state with matching checkpoint
+    report = await db_session.get(Report, report_id)
+    assert report is not None
+    report.status = "waiting_for_input"
+    job = await db_session.get(Job, job_id)
+    assert job is not None
+    job.status = "waiting_for_input"
+    job.checkpoint_id = "chk-12345"
+    job.pending_action = {"interrupt_id": "intr-abcde", "kind": "clarification", "prompt": {}}
+    await db_session.commit()
+
+    # 3. Submitting with mismatched interrupt_id must fail with 409 Conflict
+    bad_interrupt = await client.post(
+        f"/reports/{report_id}/answers",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "checkpoint_id": "chk-12345",
+            "interrupt_id": "wrong-interrupt",
+            "text": "Opposite the bakery",
+        },
+    )
+    assert bad_interrupt.status_code == 409
+
+    # 4. Submit valid clarification answer with confirmed location
     clarify_res = await client.post(
         f"/reports/{report_id}/answers",
         headers={"Authorization": f"Bearer {token}"},
