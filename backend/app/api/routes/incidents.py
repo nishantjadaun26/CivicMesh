@@ -159,14 +159,18 @@ async def submit_follow_up(
 
     follow_up_id = uuid4()
     # Record citizen observation status event (evidence binding & event commit together)
+    payload = {
+        "description": request.text,
+        "same_location_confirmed": request.same_location_confirmed,
+    }
+    if request.evidence_ids:
+        payload["_evidence_ids"] = [str(eid) for eid in request.evidence_ids]
+
     event = StatusEvent(
         id=follow_up_id,
         incident_id=incident_id,
         event_type="citizen_observation",
-        payload={
-            "description": request.text,
-            "same_location_confirmed": request.same_location_confirmed,
-        },
+        payload=payload,
     )
     db.add(event)
     await db.commit()

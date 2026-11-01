@@ -1,5 +1,6 @@
 """Private storage media handling and evidence verification."""
 
+import logging
 from uuid import UUID, uuid4
 
 import httpx
@@ -16,7 +17,17 @@ from backend.app.schemas.uploads import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+logger = logging.getLogger("civicmesh.storage")
 settings = get_settings()
+
+MIME_EXTENSION_MAP: dict[str, str] = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "audio/mp4": ".m4a",
+    "audio/mpeg": ".mp3",
+    "audio/wav": ".wav",
+}
 
 
 class StorageService:
@@ -37,7 +48,9 @@ class StorageService:
             raise ValidationError("Audio exceeds size limit.")
 
         evidence_id = uuid4()
-        storage_path = f"evidence/{owner_id}/{evidence_id}/{request.filename}"
+        ext = MIME_EXTENSION_MAP.get(request.content_type, ".bin")
+        safe_filename = f"{uuid4().hex}{ext}"
+        storage_path = f"evidence/{owner_id}/{evidence_id}/{safe_filename}"
 
         evidence = Evidence(
             id=evidence_id,
@@ -68,14 +81,29 @@ class StorageService:
                     )
                     if resp.status_code == 200:
                         data = resp.json()
-                        token = data.get("token") or data.get("url")
-                        if token:
+                        if data.get("url"):
+                            rel_url = data["url"]
+                            if rel_url.startswith("http://") or rel_url.startswith("https://"):
+                                upload_url = rel_url
+                            elif rel_url.startswith("/storage/v1"):
+                                upload_url = f"{settings.SUPABASE_URL.rstrip('/')}{rel_url}"
+                            elif rel_url.startswith("/"):
+                                upload_url = f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1{rel_url}"
+                            else:
+                                upload_url = f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/{rel_url}"
+                        elif data.get("token"):
+                            token = data["token"]
                             upload_url = (
                                 f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/upload/sign/"
                                 f"{settings.STORAGE_EVIDENCE_BUCKET}/{storage_path}?token={token}"
                             )
-            except Exception:
-                pass
+                    else:
+                        logger.warning(
+                            "Supabase storage signing returned non-200 status: %d",
+                            resp.status_code,
+                        )
+            except Exception as exc:
+                logger.warning("Supabase storage signing failed: %s", type(exc).__name__)
 
         if not upload_url:
             upload_url = (
@@ -108,7 +136,7 @@ class StorageService:
         if report_id is None and incident_id is None:
             raise ValidationError("Evidence must be bound to a report or an incident.")
 
-        query = select(Evidence).where(Evidence.id.in_(evidence_ids))
+        query = select(Evidence).where(Evidence.id.in_(evidence_ids)).with_for_update()
         result = await db.execute(query)
         items = list(result.scalars().all())
 

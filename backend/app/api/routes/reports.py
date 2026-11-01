@@ -108,8 +108,14 @@ async def submit_clarification_answers(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ReportResponse:
     """Submit citizen clarification answers and re-enqueue processing to resume workflow."""
-    # Validate that report and job are in waiting_for_input state
-    job_query = select(Job).where(Job.report_id == report.id).order_by(Job.created_at.desc()).limit(1)
+    # Validate that report and job are in waiting_for_input state (with row lock)
+    job_query = (
+        select(Job)
+        .where(Job.report_id == report.id)
+        .order_by(Job.created_at.desc())
+        .limit(1)
+        .with_for_update()
+    )
     job_res = await db.execute(job_query)
     job = job_res.scalar_one_or_none()
 

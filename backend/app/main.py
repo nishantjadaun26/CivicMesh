@@ -74,7 +74,7 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
         loc = " -> ".join(str(loc_part) for loc_part in err.get("loc", []))
         errors.append(f"{loc}: {err.get('msg')}")
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        status_code=422,
         content=ErrorResponse(
             code="validation_error",
             message="Request schema validation failed",
