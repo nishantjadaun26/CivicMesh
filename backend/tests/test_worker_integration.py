@@ -6,8 +6,11 @@ from uuid import UUID, uuid4
 import pytest
 from backend.app.database.models import (
     Authority,
+    Evidence,
     Incident,
+    IncidentReport,
     Job,
+    Report,
     SourceChunk,
     SourceDocument,
     utc_now,
@@ -207,7 +210,10 @@ async def test_provider_failure_backoff_and_budget_are_persistent(client, db_ses
     assert provider.calls == 3
 
 
-async def test_follow_up_uses_private_job_and_never_claims_resolution(client, db_session, tmp_path):
+@pytest.mark.parametrize("oversized_baseline", [False, True])
+async def test_follow_up_uses_private_job_and_never_claims_resolution(
+    client, db_session, tmp_path, oversized_baseline
+):
     owner = uuid4()
     incident = Incident(
         id=uuid4(),
@@ -228,10 +234,28 @@ async def test_follow_up_uses_private_job_and_never_claims_resolution(client, db
             json={
                 "filename": "follow-up.jpg",
                 "content_type": "image/jpeg",
-                "file_size_bytes": 100,
+                "file_size_bytes": 9 * 1024 * 1024 if oversized_baseline else 100,
             },
         )
     ).json()
+    if oversized_baseline:
+        baseline_report = Report(id=uuid4(), owner_id=owner, text="Isolated baseline report")
+        db_session.add(baseline_report)
+        await db_session.flush()
+        db_session.add(IncidentReport(incident_id=incident_id, report_id=baseline_report.id))
+        db_session.add(
+            Evidence(
+                id=uuid4(),
+                owner_id=owner,
+                report_id=baseline_report.id,
+                storage_bucket="civicmesh-evidence",
+                storage_path="isolated-large-baseline",
+                mime_type="image/jpeg",
+                file_size_bytes=9 * 1024 * 1024,
+                verified=True,
+            )
+        )
+        await db_session.commit()
     created = (
         await client.post(
             f"/incidents/{incident_id}/follow-ups",

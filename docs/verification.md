@@ -9,7 +9,7 @@ genuine model request or deployed site was used.
 |---|---|
 | `uv sync --project backend --frozen --extra dev` | Passed; locked local backend and AI package installed, including psycopg binary |
 | `backend/.venv/Scripts/ruff.exe check backend scripts` | Passed locally; same check in Linux CI |
-| `backend/.venv/Scripts/pytest.exe -q backend/tests backend/app/ai/tests` | 139 passed, 1 PostgreSQL test skipped locally because PostgreSQL/Docker are unavailable on this machine |
+| `backend/.venv/Scripts/pytest.exe -q backend/tests backend/app/ai/tests` | 140 passed, 1 PostgreSQL test skipped locally because PostgreSQL/Docker are unavailable on this machine |
 | `backend/.venv/Scripts/python.exe scripts/validate_migrations.py` | Both migrations parse: 54 and 39 SQL statements |
 | `backend/.venv/Scripts/python.exe scripts/export_openapi.py` then `git diff --exit-code contracts/openapi.json` | Export/type changes regenerated and checked; final tracked schema must remain unchanged on re-export |
 | `npm.cmd ci` in frontend | Passed; lockfile installs without forced peers |
@@ -19,6 +19,7 @@ genuine model request or deployed site was used.
 | `npm.cmd test` | Service-state suite covers unavailable services, legacy caches, no fake identity, real coordinate selection, no false submission and mobile layouts; final CI runs all seven cases |
 | `npm.cmd run test:integration` | Real browser→API→ORM→worker→LangGraph→checkpoint→UI flow passes; provider/Auth/Storage doubles exist only in tests |
 | `npm.cmd audit --audit-level=moderate` | Zero vulnerabilities after the patched minimatch override |
+| `backend/.venv/Scripts/python.exe scripts/check_public_bundle.py` after build | Passed; checked server variable names, any configured process-secret values and the browser-test signing fixture are absent from SPA assets |
 | `pytest -q backend/tests/test_postgres_integration.py` with the CI-only loopback DSN | Passed in disposable PostgreSQL CI: SQL migrations, RLS/Storage policies, PostGIS coordinates, idempotency race, real worker/checkpoints and session exclusion |
 | `docker build -t civicmesh-check .` and runtime import/excluded-test check | Passed in Linux container CI; Docker is unavailable locally |
 | `python -m backend.app.worker.init_checkpoints` without `--apply` | Plan-only behavior verified; no network/database operation |

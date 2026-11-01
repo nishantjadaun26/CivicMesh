@@ -57,6 +57,12 @@ submission, incident merge, government update or publication.
 
 ## Contract and ownership audit
 
+Follow-up baselines are selected only when authorized images fit together with
+the new upload within the 12 MiB inline budget. If no baseline fits, the workflow
+returns insufficient evidence instead of loading an oversized comparison or
+claiming visual resolution. A target that is no longer public is rejected before
+new follow-up processing.
+
 | API | Identity and behavior |
 |---|---|
 | `POST /uploads/prepare` | Verified user plus write quota; private ticket; only then persist owner-bound metadata |

@@ -35,5 +35,6 @@ jobs:
           version: '0.8.15'
           python-version: '3.11'
       - run: uv sync --project ../backend --frozen --extra dev
+      - run: ../backend/.venv/bin/python ../scripts/check_public_bundle.py
       - run: npm run test:integration
       - run: npm audit --audit-level=moderate

@@ -243,16 +243,22 @@ class Worker:
 
     async def follow_up_input(self, db, job, target):
         incident = await db.get(Incident, target.incident_id)
-        current = list(
-            (
-                await db.execute(select(Evidence.id).where(Evidence.follow_up_id == target.id))
-            ).scalars()
-        )
+        if incident is None or not incident.is_public:
+            raise AIError("incident_unavailable", "The public incident is no longer available.")
+        current_rows = (
+            await db.execute(
+                select(Evidence.id, Evidence.file_size_bytes).where(
+                    Evidence.follow_up_id == target.id
+                )
+            )
+        ).all()
+        current = [identifier for identifier, _ in current_rows]
+        remaining = 12 * 1024 * 1024 - sum(size for _, size in current_rows)
         # Baselines remain private: another citizen's original photo is never disclosed to this workflow.
-        baseline = list(
+        baseline_rows = list(
             (
                 await db.execute(
-                    select(Evidence.id)
+                    select(Evidence.id, Evidence.file_size_bytes)
                     .join(IncidentReport, Evidence.report_id == IncidentReport.report_id)
                     .where(
                         IncidentReport.incident_id == target.incident_id,
@@ -264,8 +270,13 @@ class Worker:
                     .order_by(Evidence.created_at)
                     .limit(5)
                 )
-            ).scalars()
+            ).all()
         )
+        baseline = []
+        for identifier, size in baseline_rows:
+            if size <= remaining:
+                baseline.append(identifier)
+                remaining -= size
         observed_at = target.created_at
         if observed_at.tzinfo is None:
             from datetime import timezone
