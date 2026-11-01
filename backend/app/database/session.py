@@ -10,7 +10,7 @@ settings = get_settings()
 engine = create_async_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,
-    echo=settings.LOG_LEVEL.upper() == "DEBUG",
+    echo=settings.ENVIRONMENT == "development" and settings.LOG_LEVEL.upper() == "DEBUG",
     hide_parameters=True,
 )
 
