@@ -220,7 +220,12 @@ export interface CitizenService {
 export function getUserCampaignMemberships(userId: string): Set<string> {
   try {
     const raw = localStorage.getItem(`civicmesh.campaign-membership.${userId}`);
-    return new Set(raw ? JSON.parse(raw) : []);
+    if (raw) return new Set(JSON.parse(raw));
+    // For demo/unauthenticated user, default to initial seed campaigns marked as joined
+    if (userId === demoUser.id || userId === 'me') {
+      return new Set(state.campaigns.filter(c => c.joined).map(c => c.id));
+    }
+    return new Set();
   } catch {
     return new Set();
   }
@@ -459,11 +464,10 @@ export const citizenService: CitizenService = {
     }
     setUserCampaignMemberships(userId, memberships);
 
+    // Keep membership changes scoped to the active user rather than inverting shared Campaign.joined
     commit({
       ...state,
-      campaigns: state.campaigns.map(c =>
-        c.id === id ? { ...c, joined: !c.joined } : c
-      ),
+      campaigns: [...state.campaigns],
     });
   },
 };

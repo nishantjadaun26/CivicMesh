@@ -449,7 +449,11 @@ export function ReportPage() {
               )}
 
               <p className="notice">
-                Submissions are stored securely on this device only and have not been sent to backend services.
+                {busy
+                  ? progress?.isBackendConnected
+                    ? 'Submitting report to backend services…'
+                    : 'Saving report securely on this device only…'
+                  : 'This report has not been sent yet. Review your details before submitting.'}
               </p>
             </>
           )}

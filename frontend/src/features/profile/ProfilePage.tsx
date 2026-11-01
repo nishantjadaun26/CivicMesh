@@ -19,7 +19,7 @@ export function ProfilePage() {
     .filter(i => (user ? i.authorId === user.id : i.authorId === demoUser.id || i.authorId === 'me'))
     .sort((a, b) => Date.parse(b.reportedAt) - Date.parse(a.reportedAt));
 
-  const joined = campaigns.filter(c => memberships.has(c.id) || (isDemo && c.joined));
+  const joined = campaigns.filter(c => memberships.has(c.id));
   const myContributions = isDemo ? contributions : [];
   const points = myContributions.reduce((n, c) => n + c.points, 0);
 
