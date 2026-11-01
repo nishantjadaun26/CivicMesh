@@ -1,3 +1,5 @@
+> Historical prototype concept. The current pilot supports garbage accumulation and water leaks only. See [the integration audit](../docs/integration-audit.md) for implemented behavior and limits.
+
 # CivicMesh
 
 <!-- impeccable:product-schema 1 -->

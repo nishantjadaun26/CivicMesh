@@ -3,7 +3,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from backend.app.api.dependencies.auth import get_current_user_id
+from backend.app.api.dependencies.auth import require_write_user
 from backend.app.database.session import get_db
 from backend.app.schemas.uploads import UploadPrepareRequest, UploadPrepareResponse
 from backend.app.services.storage.media import StorageService
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/uploads", tags=["Uploads"])
 )
 async def prepare_upload(
     request: UploadPrepareRequest,
-    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    user_id: Annotated[UUID, Depends(require_write_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> UploadPrepareResponse:
     """Prepare an authorized private upload destination bound to the authenticated citizen."""

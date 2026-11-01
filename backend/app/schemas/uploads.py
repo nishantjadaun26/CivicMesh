@@ -20,8 +20,8 @@ ALLOWED_MIME_TYPES = {
     "audio/mpeg",
 }
 
-# Max file size limits (15MB for images, 10MB for audio)
-MAX_IMAGE_SIZE_BYTES = 15 * 1024 * 1024
+# AI inline limits: 10 MiB per file, 12 MiB combined per request.
+MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
 MAX_AUDIO_SIZE_BYTES = 10 * 1024 * 1024
 
 

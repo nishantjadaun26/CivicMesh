@@ -3,7 +3,11 @@
 from typing import Annotated
 from uuid import UUID
 
-from backend.app.api.dependencies.auth import get_current_user_id, require_report_owner
+from backend.app.api.dependencies.auth import (
+    get_current_user_id,
+    require_report_owner,
+    require_write_user,
+)
 from backend.app.core.errors import ConflictError
 from backend.app.database.models import Evidence, Job, Report
 from backend.app.database.session import get_db
@@ -13,7 +17,7 @@ from backend.app.schemas.reports import (
     ReportResponse,
 )
 from backend.app.services.jobs.queue import JobQueueService
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,9 +33,9 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 )
 async def create_report(
     request: ReportCreateRequest,
-    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    user_id: Annotated[UUID, Depends(require_write_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=128)] = None,
 ) -> ReportResponse:
     """Submit a genuine citizen report and enqueue background AI processing."""
     report, job = await JobQueueService.create_report_with_job(
@@ -106,41 +110,15 @@ async def submit_clarification_answers(
     report: Annotated[Report, Depends(require_report_owner)],
     request: ClarificationAnswerRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
+    user_id: Annotated[UUID, Depends(require_write_user)],
 ) -> ReportResponse:
     """Submit citizen clarification answers and re-enqueue processing to resume workflow."""
-    # Validate that report and job are in waiting_for_input state (with row lock)
-    job_query = (
-        select(Job)
-        .where(Job.report_id == report.id)
-        .order_by(Job.created_at.desc())
-        .limit(1)
-        .with_for_update()
-    )
-    job_res = await db.execute(job_query)
-    job = job_res.scalar_one_or_none()
-
-    if not job or job.status != "waiting_for_input" or report.status != "waiting_for_input":
+    from backend.app.services.jobs.answers import enqueue_answer
+    job = (await db.execute(select(Job).where(Job.report_id == report.id))).scalar_one_or_none()
+    if job is None or (job.pending_action or {}).get("kind") != "clarification":
         raise ConflictError("Report is not waiting for clarification input.")
-
-    # Validate checkpoint_id and interrupt_id match stored workflow action
-    if job.checkpoint_id != request.checkpoint_id:
-        raise ConflictError("Stale or invalid checkpoint ID.")
-
-    pending_interrupt = (job.pending_action or {}).get("interrupt_id")
-    if pending_interrupt != request.interrupt_id:
-        raise ConflictError("Stale or invalid interrupt ID.")
-
-    # Preserve the original report. The worker consumes this validated reply using
-    # the saved checkpoint/action instead of starting extraction from mutated input.
-    report.status = "pending"
-    job.status = "pending"
-    job.pending_action = {
-        **(job.pending_action or {}),
-        "resume_pending": True,
-        "reply": request.model_dump(mode="json", exclude={"checkpoint_id", "interrupt_id"}),
-    }
-
-    await db.commit()
+    await enqueue_answer(db, job.id, report.owner_id, request.checkpoint_id, request.interrupt_id,
+                         request.model_dump(mode="json", exclude={"checkpoint_id", "interrupt_id"}))
     await db.refresh(report)
 
     evidence_query = select(Evidence.id).where(Evidence.report_id == report.id)
@@ -162,3 +140,16 @@ async def submit_clarification_answers(
         created_at=report.created_at,
         updated_at=report.updated_at,
     )
+
+
+@router.get("", response_model=list[ReportResponse], summary="List the authenticated citizen's private reports")
+async def list_reports(
+    user_id: Annotated[UUID, Depends(get_current_user_id)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    reports = (await db.execute(select(Report).where(Report.owner_id == user_id)
+                               .order_by(Report.created_at.desc(), Report.id)
+                               .offset((page - 1) * limit).limit(limit))).scalars().all()
+    return [await get_report(report, db) for report in reports]

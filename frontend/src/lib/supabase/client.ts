@@ -65,19 +65,25 @@ export function useAuth(): AuthState {
       return;
     }
 
+    let active = true;
+    let revision = 0;
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!active || revision !== 0) return;
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+    }).catch(() => {
+      if (active && revision === 0) setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      revision += 1;
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => { active = false; subscription.unsubscribe(); };
   }, []);
 
   const signInWithEmail = async (email: string, password?: string) => {
@@ -111,7 +117,8 @@ export function useAuth(): AuthState {
 
   const signOut = async () => {
     if (supabase) {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw new Error('Sign-out could not complete. Please retry.');
     }
     setUser(null);
     setSession(null);

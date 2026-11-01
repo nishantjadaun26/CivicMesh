@@ -170,6 +170,7 @@ class Evidence(Base):
     owner_id: Mapped[UUID] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
     report_id: Mapped[UUID | None] = mapped_column(ForeignKey("reports.id", ondelete="SET NULL"), nullable=True)
     incident_id: Mapped[UUID | None] = mapped_column(ForeignKey("incidents.id", ondelete="SET NULL"), nullable=True)
+    follow_up_id: Mapped[UUID | None] = mapped_column(ForeignKey("follow_ups.id", ondelete="SET NULL"), nullable=True)
     storage_bucket: Mapped[str] = mapped_column(String(100), nullable=False)
     storage_path: Mapped[str] = mapped_column(Text, nullable=False)
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -191,10 +192,13 @@ class Job(Base, TimestampMixin):
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     owner_id: Mapped[UUID] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
-    report_id: Mapped[UUID] = mapped_column(ForeignKey("reports.id", ondelete="CASCADE"), nullable=False)
+    report_id: Mapped[UUID | None] = mapped_column(ForeignKey("reports.id", ondelete="CASCADE"), nullable=True, unique=True)
+    follow_up_id: Mapped[UUID | None] = mapped_column(ForeignKey("follow_ups.id", ondelete="CASCADE"), nullable=True, unique=True)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     kind: Mapped[str] = mapped_column(String(50), default="report", nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    failures: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     max_attempts: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -203,7 +207,7 @@ class Job(Base, TimestampMixin):
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     locked_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    report: Mapped["Report"] = relationship(back_populates="jobs")
+    report: Mapped["Report | None"] = relationship(back_populates="jobs")
     workflow_runs: Mapped[list["WorkflowRun"]] = relationship(back_populates="job", cascade="all, delete-orphan")
 
     __table_args__ = (
@@ -217,8 +221,8 @@ class WorkflowRun(Base, TimestampMixin):
     __tablename__ = "workflow_runs"
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    job_id: Mapped[UUID] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False)
-    workflow_id: Mapped[UUID] = mapped_column(UniqueConstraint(), nullable=False)
+    job_id: Mapped[UUID] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, unique=True)
+    workflow_id: Mapped[UUID] = mapped_column(unique=True, nullable=False)
     owner_id: Mapped[UUID] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), nullable=False)
     state: Mapped[str] = mapped_column(String(50), nullable=False)
     result_payload: Mapped[dict[str, Any] | None] = mapped_column(JsonType, nullable=True)
@@ -247,3 +251,30 @@ class StatusEvent(Base):
         Index("idx_status_events_incident", "incident_id"),
         Index("idx_status_events_report", "report_id"),
     )
+
+
+class FollowUp(Base, TimestampMixin):
+    """Private owner-scoped observation; no implicit public or authority-status writes."""
+    __tablename__ = "follow_ups"
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    owner_id: Mapped[UUID] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"))
+    incident_id: Mapped[UUID] = mapped_column(ForeignKey("incidents.id", ondelete="CASCADE"))
+    text: Mapped[str] = mapped_column(Text, default="")
+    same_location_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), default="pending")
+    result: Mapped[dict | None] = mapped_column(JsonType, nullable=True)
+    __table_args__ = (UniqueConstraint("owner_id", "idempotency_key", name="uq_follow_up_owner_key"),)
+
+
+class WorkerHeartbeat(Base):
+    __tablename__ = "worker_heartbeats"
+    worker_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class RateWindow(Base):
+    __tablename__ = "rate_windows"
+    owner_id: Mapped[UUID] = mapped_column(primary_key=True)
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, default=0)

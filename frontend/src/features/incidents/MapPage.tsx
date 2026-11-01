@@ -15,6 +15,7 @@ export function MapPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const [page, setPage] = useState(1);
   const [params, setParams] = useSearchParams();
   const [view, setView] = useState<'map' | 'list'>('map');
   const previousTrigger = useRef<HTMLElement | null>(null);
@@ -24,16 +25,6 @@ export function MapPage() {
   const category = categories.includes(rawCategory as Category)
     ? (rawCategory as Category)
     : 'All';
-  const status = [
-    'all',
-    'open',
-    'resolved',
-    'Under Review',
-    'CivicMesh Verified',
-    'Authority Verified',
-  ].includes(params.get('status') ?? '')
-    ? params.get('status')!
-    : 'all';
   const routeParams = useParams<{ id?: string }>();
   const selectedId = params.get('issue') || routeParams.id;
 
@@ -42,7 +33,7 @@ export function MapPage() {
     setLoading(true);
     setError('');
     issueService
-      .list(controller.signal)
+      .list(controller.signal, page)
       .then(res => {
         setIssues(res.issues);
         setListMeta({ source: res.source, backendFailed: res.backendFailed });
@@ -57,21 +48,27 @@ export function MapPage() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [attempt]);
+  }, [attempt, page]);
 
   const filtered = issues.filter(
     i =>
       (category === 'All' || i.category === category) &&
-      (status === 'all' ||
-        (status === 'open' && i.status !== 'Resolved') ||
-        (status === 'resolved' && i.status === 'Resolved') ||
-        i.status === status) &&
       `${i.title} ${i.location} ${i.category}`
         .toLowerCase()
         .includes(query.toLowerCase().trim())
   );
 
-  const selected = filtered.find(i => i.id === selectedId);
+  const [detail, setDetail] = useState<Issue>();
+  useEffect(() => {
+    if (!selectedId) { setDetail(undefined); return; }
+    const controller = new AbortController();
+    setDetail(undefined);
+    issueService.get(selectedId, controller.signal).then(setDetail).catch(error => {
+      if (!controller.signal.aborted) setError(error instanceof Error ? error.message : 'Incident unavailable.');
+    });
+    return () => controller.abort();
+  }, [selectedId]);
+  const selected = detail?.id === selectedId ? detail : filtered.find(i => i.id === selectedId);
 
   useEffect(() => {
     if (selectedId)
@@ -108,15 +105,6 @@ export function MapPage() {
     });
   }
 
-  async function support(id: string) {
-    const result = await issueService.toggleSupport(id);
-    setIssues(items => items.map(i => (i.id === id ? result : i)));
-  }
-
-  function handleUpdate(updated: Issue) {
-    setIssues(items => items.map(i => (i.id === updated.id ? updated : i)));
-  }
-
   function clear() {
     setParams({});
   }
@@ -146,33 +134,6 @@ export function MapPage() {
             value={query}
             onChange={e => update('q', e.target.value)}
           />
-        </label>
-        <label className="status-filter">
-          <Icon name="filter" size={20} />
-          <span className="sr-only">Filter by status</span>
-          <select
-            aria-label="Filter by status"
-            value={
-              [
-                'all',
-                'open',
-                'resolved',
-                'Under Review',
-                'CivicMesh Verified',
-                'Authority Verified',
-              ].includes(status)
-                ? status
-                : 'all'
-            }
-            onChange={e => update('status', e.target.value)}
-          >
-            <option value="all">All statuses</option>
-            <option value="open">Open issues</option>
-            <option value="resolved">Resolved</option>
-            <option>Under Review</option>
-            <option>CivicMesh Verified</option>
-            <option>Authority Verified</option>
-          </select>
         </label>
         <div className="mobile-view" aria-label="View">
           <button aria-pressed={view === 'map'} onClick={() => setView('map')}>
@@ -258,26 +219,27 @@ export function MapPage() {
         </div>
 
         <aside className="results-panel" aria-label="Nearby issues">
+          <div className="form-actions"><button className="secondary-button" disabled={page === 1 || loading} onClick={() => setPage(page - 1)}>Previous incidents</button>
+          <button className="secondary-button" disabled={issues.length < 20 || loading} onClick={() => setPage(page + 1)}>More incidents</button></div>
           {selected ? (
             <IssuePreview
               key={selected.id}
               issue={selected}
               onClose={close}
-              onSupport={support}
-              onUpdate={handleUpdate}
+
             />
           ) : (
             <>
               <div className="results-heading">
                 <div>
-                  <h2>In your neighborhood</h2>
+                  <h2>Published incidents on this page</h2>
                   <p role="status">
                     {loading
                       ? 'Loading issues…'
                       : `${filtered.length} ${
                           filtered.length === 1 ? 'issue' : 'issues'
                         } ${
-                          query || category !== 'All' || status !== 'all'
+                          query || category !== 'All'
                             ? 'matching your filters'
                             : 'to explore'
                         }`}
@@ -327,10 +289,7 @@ export function MapPage() {
                         <div className="issue-row-top">
                           <CategoryIcon category={issue.category} />
                           <span className="issue-category">{issue.category}</span>
-                          <span className="support-count">
-                            <Icon name="people" size={15} />
-                            {issue.supporters}
-                          </span>
+
                         </div>
                         <h3>{issue.title}</h3>
                         <p>

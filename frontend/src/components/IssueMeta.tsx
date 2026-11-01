@@ -2,15 +2,8 @@ import type { Category, IssueStatus } from '../types/civic';
 import { Icon, type IconName } from './Icon';
 
 export const categoryIcons: Record<Category, IconName> = {
-  Roads: 'road',
   'Garbage accumulation': 'waste',
   'Water leak': 'water',
-  Waste: 'waste',
-  Water: 'water',
-  Lighting: 'light',
-  Drainage: 'drain',
-  Infrastructure: 'road',
-  Other: 'pin',
 };
 
 export function CategoryIcon({ category }: { category: Category }) {
@@ -25,13 +18,7 @@ export function CategoryIcon({ category }: { category: Category }) {
 export function StatusBadge({ status }: { status: IssueStatus }) {
   return (
     <span
-      className={`status-badge ${
-        status === 'Reported'
-          ? 'reported'
-          : status === 'Under Review'
-          ? 'confirmed'
-          : 'resolved'
-      }`}
+      className="status-badge reported"
     >
       <span aria-hidden="true" />
       {status}

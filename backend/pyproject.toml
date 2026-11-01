@@ -17,16 +17,16 @@ dependencies = [
     "pyjwt[crypto]>=2.9.0",
     "httpx>=0.28.0",
     "python-multipart>=0.0.18",
+    "civicmesh-ai[checkpoints]",
+    "psycopg[binary,pool]>=3.2.0",
 ]
 
 [project.optional-dependencies]
-ai = [
-    "civicmesh-ai",
-]
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "ruff>=0.8.0",
+    "pglast>=7.0",
 ]
 
 [build-system]
@@ -34,8 +34,12 @@ requires = ["setuptools>=70.0.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["app*"]
+where = [".."]
+include = ["backend", "backend.app", "backend.app.*"]
+exclude = ["backend.app.ai*"]
+
+[tool.uv.sources]
+civicmesh-ai = { path = "app/ai", editable = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

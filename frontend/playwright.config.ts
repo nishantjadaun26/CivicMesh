@@ -6,9 +6,9 @@ export default defineConfig({
   workers: 1,
   timeout: 30000,
   webServer: {
-    command: 'npm run preview -- --port 4173',
+    command: 'node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 4173 --strictPort',
     url: 'http://127.0.0.1:4173',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     env: { VITE_API_URL: '', VITE_SUPABASE_URL: '', VITE_SUPABASE_ANON_KEY: '', VITE_MAP_TILE_URL: '', VITE_MAP_ATTRIBUTION: '' },
     timeout: 15000,
   },

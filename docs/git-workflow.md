@@ -1,6 +1,6 @@
 # Three-person integration workflow
 
-All three feature branches share the folder-only setup and CodeRabbit configuration. `main` is integrated.
+The original three module PRs are merged. `feat/project-integration` contains the cross-module implementation under separate review; keep main protected from unreviewed integration changes.
 Each teammate uses their own clone:
 
 ```powershell
@@ -39,8 +39,7 @@ Coordinate shared files before editing. When contracts and dependencies are intr
 regenerate contracts and commit dependency locks with their corresponding changes.
 
 Recommended main protection: PR required, at least one human approval, required observed CI
-checks, conversations resolved, no force pushes. Only CodeRabbit configuration validation is
-currently configured; application checks should be added with implementation. Repository settings were not
+checks, conversations resolved, no force pushes. CodeRabbit configuration, backend/AI tests, OpenAPI/type drift, PostgreSQL/RLS, container and frontend browser checks are configured. Repository settings were not
 changed. Do not require an assumed CodeRabbit status name; verify the actual successful check on
 a genuine PR first. Ensure main remains the default branch for CodeRabbit's main-only automation.
 

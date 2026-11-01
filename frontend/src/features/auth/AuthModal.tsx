@@ -20,6 +20,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    if (!isOpen) { setPassword(''); setEmail(''); setMessage(''); setError(''); }
+  }, [isOpen]);
+
+  useEffect(() => {
     if (!isOpen) return;
 
     // Save previous active element before modal steals focus
@@ -194,12 +198,13 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               className="primary-button"
               style={{ width: '100%' }}
               onClick={async () => {
-                await signOut();
-                onClose();
+                try { await signOut(); onClose(); }
+                catch (error) { setError(error instanceof Error ? error.message : 'Sign-out could not complete.'); }
               }}
             >
               Sign out
             </button>
+            {error && <p role="alert">{error}</p>}
           </div>
         ) : (
           <form onSubmit={handleSubmit}>

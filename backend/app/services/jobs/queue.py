@@ -1,6 +1,5 @@
 """Persistent async jobs queue and idempotent atomic report submission."""
 
-from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from backend.app.core.config import get_settings
@@ -165,91 +164,3 @@ class JobQueueService:
         await db.refresh(report)
         await db.refresh(job)
         return report, job
-
-    @staticmethod
-    async def claim_next_job(worker_id: str, db: AsyncSession) -> Job | None:
-        """Claim next pending job safely for processing."""
-        stmt = (
-            select(Job)
-            .where(Job.status == "pending")
-            .where(Job.attempts < Job.max_attempts)
-            .order_by(Job.created_at.asc())
-            .limit(1)
-            .with_for_update(skip_locked=True)
-        )
-        result = await db.execute(stmt)
-        job = result.scalar_one_or_none()
-        if job:
-            job.status = "running"
-            job.attempts += 1
-            job.locked_at = datetime.now(timezone.utc)
-            job.locked_by = worker_id
-            await db.commit()
-            await db.refresh(job)
-        return job
-
-    @staticmethod
-    async def mark_waiting_for_input(
-        job_id: UUID,
-        checkpoint_id: str,
-        pending_action: dict,
-        db: AsyncSession,
-    ) -> None:
-        """Update job to waiting_for_input state with checkpoint and action prompt."""
-        job = await db.get(Job, job_id)
-        if job:
-            job.status = "waiting_for_input"
-            job.checkpoint_id = checkpoint_id
-            job.pending_action = pending_action
-            job.locked_at = None
-            job.locked_by = None
-            # Also update report status
-            report = await db.get(Report, job.report_id)
-            if report:
-                report.status = "waiting_for_input"
-            await db.commit()
-
-    @staticmethod
-    async def mark_completed(
-        job_id: UUID,
-        result_payload: dict,
-        db: AsyncSession,
-    ) -> None:
-        """Mark job completed and persist extraction result on report."""
-        job = await db.get(Job, job_id)
-        if job:
-            job.status = "completed"
-            job.error_code = None
-            job.error_message = None
-            job.locked_at = None
-            job.locked_by = None
-            report = await db.get(Report, job.report_id)
-            if report:
-                report.status = "processed"
-                report.extraction_result = result_payload
-                if "category" in result_payload and result_payload["category"]:
-                    report.category = result_payload["category"]
-            await db.commit()
-
-    @staticmethod
-    async def mark_failed(
-        job_id: UUID,
-        error_code: str,
-        error_message: str,
-        db: AsyncSession,
-    ) -> None:
-        """Mark job failed or re-queue if attempts remain."""
-        job = await db.get(Job, job_id)
-        if job:
-            job.error_code = error_code
-            job.error_message = error_message
-            job.locked_at = None
-            job.locked_by = None
-            if job.attempts < job.max_attempts:
-                job.status = "pending"  # Re-queue for retry within budget
-            else:
-                job.status = "failed"
-                report = await db.get(Report, job.report_id)
-                if report:
-                    report.status = "failed"
-            await db.commit()

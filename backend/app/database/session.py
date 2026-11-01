@@ -3,6 +3,7 @@
 from collections.abc import AsyncGenerator
 
 from backend.app.core.config import get_settings
+from backend.app.core.tls import database_tls
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 settings = get_settings()
@@ -10,8 +11,9 @@ settings = get_settings()
 engine = create_async_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,
-    echo=settings.LOG_LEVEL.upper() == "DEBUG",
+    echo=settings.ENVIRONMENT == "development" and settings.LOG_LEVEL.upper() == "DEBUG",
     hide_parameters=True,
+    connect_args={"ssl": database_tls(settings)} if settings.ENVIRONMENT == "production" else {},
 )
 
 AsyncSessionLocal = async_sessionmaker(

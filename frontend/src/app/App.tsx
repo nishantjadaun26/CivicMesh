@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, Link } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { ReportPage } from '../features/reports/ReportPage';
+import { ReportDetail } from '../features/reports/ReportDetail';
+import { JobPage } from '../features/reports/JobPanel';
 import { CampaignsPage } from '../features/campaigns/CampaignsPage';
 import { ProfilePage } from '../features/profile/ProfilePage';
 import { MapPage } from '../features/incidents/MapPage';
@@ -89,7 +91,7 @@ export function App() {
           </Link>
           <div className="location-label">
             <Icon name="pin" size={18} />
-            <span>Pilot locality: not configured</span>
+            <span>Garbage and water leak pilot</span>
           </div>
           <div className="header-right">
             <span className="demo-label">Citizen workspace</span>
@@ -106,6 +108,8 @@ export function App() {
             <Route path="/incidents" element={<MapPage />} />
             <Route path="/incidents/:id" element={<MapPage />} />
             <Route path="/report" element={<ReportPage />} />
+            <Route path="/reports/:id" element={<ReportDetail />} />
+            <Route path="/jobs/:id" element={<JobPage />} />
             <Route path="/campaigns" element={<CampaignsPage />} />
             <Route path="/campaigns/:id" element={<CampaignsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
