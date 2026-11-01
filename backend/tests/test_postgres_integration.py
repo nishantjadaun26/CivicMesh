@@ -170,3 +170,23 @@ async def test_migrations_rls_storage_postgis_checkpoints_and_session_locks():
             )
             assert persisted is not None
         await application_engine.dispose()
+
+        # The runtime factory must replace a dropped connection, retaining checkpoint state.
+        from backend.app.worker.checkpoints import open_checkpointer
+
+        settings = get_test_settings().model_copy(update={"CHECKPOINT_DATABASE_URL": DSN})
+        async with open_checkpointer(settings) as pooled_saver:
+            config = {"configurable": {"thread_id": f"civicmesh:{first[1].id}"}}
+            before = await pooled_saver.aget_tuple(config)
+            async with pooled_saver.conn.connection() as borrowed:
+                old_pid = borrowed.info.backend_pid
+            result = await (
+                await connection.execute(
+                    "SELECT pg_terminate_backend(%s) AS terminated", (old_pid,)
+                )
+            ).fetchone()
+            assert result["terminated"]
+            after = await pooled_saver.aget_tuple(config)
+            assert after.checkpoint["id"] == before.checkpoint["id"]
+            async with pooled_saver.conn.connection() as replacement:
+                assert replacement.info.backend_pid != old_pid

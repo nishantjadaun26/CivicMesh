@@ -131,6 +131,13 @@ checkpoint is missing, processing fails for recovery rather than silently paying
 for a new workflow. A crash between a model response and its checkpoint write can
 still repeat a paid call; exactly-once provider billing is not guaranteed.
 
+Checkpoint operations borrow a health-checked PostgreSQL connection from a bounded
+pool; dropped connections are replaced. A transient checkpoint operation error
+consumes the persisted failure budget and retries with backoff. Worker heartbeats
+probe checkpoint storage before advertising readiness. Coordinate drafts remain
+local strings while typing and commit on blur, so decimal/negative input is not
+overwritten by numeric formatting during entry.
+
 ## Verification record
 
 Late CodeRabbit findings from the merged frontend were checked against current

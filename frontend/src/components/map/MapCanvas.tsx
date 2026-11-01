@@ -3,7 +3,10 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MAP_CENTER, type Issue } from '../../types/civic';
 import { Icon } from '../Icon';
-const markerPaths:Record<string,string>={Roads:'m7 4-3 16m13-16 3 16M12 5v3m0 3v3m0 3v2',Waste:'M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7m4-7v7',Water:'M12 3S5 11 5 15a7 7 0 0 0 14 0c0-4-7-12-7-12Z',Lighting:'M9 17h6m-5 4h4M8 14a6 6 0 1 1 8 0l-1 3H9Z',Drainage:'M4 6h16M4 18h16M7 6v12M12 6v12M17 6v12'};
+const markerPaths: Record<Issue['category'], string> = {
+ 'Garbage accumulation': 'M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7m4-7v7',
+ 'Water leak': 'M12 3S5 11 5 15a7 7 0 0 0 14 0c0-4-7-12-7-12Z',
+};
 interface Props { issues:Issue[]; selectedId:string|null; onSelect:(id:string)=>void }
 export function MapCanvas({issues,selectedId,onSelect}:Props) {
  const host=useRef<HTMLDivElement>(null);const map=useRef<L.Map|null>(null);const group=useRef<L.LayerGroup|null>(null);const userMarker=useRef<L.CircleMarker|null>(null);const select=useRef(onSelect);select.current=onSelect;
@@ -11,7 +14,7 @@ export function MapCanvas({issues,selectedId,onSelect}:Props) {
  useEffect(()=>{alive.current=true;if(!host.current||!import.meta.env.VITE_MAP_TILE_URL||!import.meta.env.VITE_MAP_ATTRIBUTION)return;const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;const instance=L.map(host.current,{zoomControl:false,scrollWheelZoom:true,zoomAnimation:!reduced,fadeAnimation:!reduced,markerZoomAnimation:!reduced}).setView([MAP_CENTER.lat,MAP_CENTER.lng],2);map.current=instance;group.current=L.layerGroup().addTo(instance);
  const tiles=L.tileLayer(import.meta.env.VITE_MAP_TILE_URL,{attribution:import.meta.env.VITE_MAP_ATTRIBUTION,maxZoom:19});layer.current=tiles;tiles.on('tileerror',()=>setTileError(true));tiles.addTo(instance);instance.attributionControl.setPrefix(false);
  const observer=new ResizeObserver(()=>instance.invalidateSize({pan:false}));observer.observe(host.current);return()=>{alive.current=false;observer.disconnect();instance.remove();map.current=null;group.current=null;};},[]);
- useEffect(()=>{if(!group.current||!map.current)return;group.current.clearLayers();issues.forEach(issue=>{const selected=selectedId===issue.id;const content=document.createElement('span');content.className=`map-pin ${issue.category.toLowerCase()} ${selected?'selected':''}`;content.innerHTML=`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${(markerPaths[issue.category]||markerPaths.Roads)}"/></svg>`;
+ useEffect(()=>{if(!group.current||!map.current)return;group.current.clearLayers();issues.forEach(issue=>{const selected=selectedId===issue.id;const content=document.createElement('span');content.className=`map-pin ${issue.category.toLowerCase()} ${selected?'selected':''}`;content.innerHTML=`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${markerPaths[issue.category]}"/></svg>`;
  const marker=L.marker([issue.coordinates.lat,issue.coordinates.lng],{icon:L.divIcon({html:content,className:'issue-marker',iconSize:[44,48],iconAnchor:[22,44]}),keyboard:true,alt:issue.title,title:issue.title,zIndexOffset:selected?1000:0}).addTo(group.current!);marker.on('click',()=>select.current(issue.id));const el=marker.getElement();el?.setAttribute('aria-label',`${issue.title}, ${issue.category}, ${issue.status}`);el?.setAttribute('aria-pressed',String(selected));el?.addEventListener('keydown',event=>{if(event.key===' '||event.key==='Enter'){event.preventDefault();event.stopPropagation();select.current(issue.id);}});
  });},[issues,selectedId]);
  useEffect(()=>{const issue=issues.find(i=>i.id===selectedId);if(issue&&map.current&&!map.current.getBounds().contains([issue.coordinates.lat,issue.coordinates.lng]))map.current.panTo([issue.coordinates.lat,issue.coordinates.lng],{animate:false});},[selectedId,issues]);

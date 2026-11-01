@@ -201,6 +201,10 @@ worker logs separately. Errors log type and job/request reference without model
 responses, report text, keys, DSNs or signed URLs. Do not turn on external provider
 HTTP body logging in production.
 
+The worker checks private checkpoint storage before refreshing its heartbeat.
+Its checkpoint pool checks connections on borrow and replaces dropped ones;
+transient operation failures retain the normal bounded job retry policy.
+
 ## 5. Vercel frontend
 
 1. Import `nishantjadaun26/CivicMesh`, select the reviewed branch/commit for staging,

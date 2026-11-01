@@ -9,14 +9,14 @@ genuine model request or deployed site was used.
 |---|---|
 | `uv sync --project backend --frozen --extra dev` | Passed; locked local backend and AI package installed, including psycopg binary |
 | `backend/.venv/Scripts/ruff.exe check backend scripts` | Passed locally; same check in Linux CI |
-| `backend/.venv/Scripts/pytest.exe -q backend/tests backend/app/ai/tests` | 140 passed, 1 PostgreSQL test skipped locally because PostgreSQL/Docker are unavailable on this machine |
+| `backend/.venv/Scripts/pytest.exe -q backend/tests backend/app/ai/tests` | 145 passed, 1 PostgreSQL test skipped locally because PostgreSQL/Docker are unavailable on this machine |
 | `backend/.venv/Scripts/python.exe scripts/validate_migrations.py` | Both migrations parse: 54 and 39 SQL statements |
 | `backend/.venv/Scripts/python.exe scripts/export_openapi.py` then `git diff --exit-code contracts/openapi.json` | Export/type changes regenerated and checked; final tracked schema must remain unchanged on re-export |
 | `npm.cmd ci` in frontend | Passed; lockfile installs without forced peers |
 | `npm.cmd run api:generate` then `git diff --exit-code src/types/api.generated.ts` | Types generated from current OpenAPI; drift compared in CI |
 | `npm.cmd run typecheck` | Passed |
 | `npm.cmd run build` | Passed; Vite production bundle |
-| `npm.cmd test` | Service-state suite covers unavailable services, legacy caches, no fake identity, real coordinate selection, no false submission and mobile layouts; final CI runs all seven cases |
+| `npm.cmd test` | Service-state suite covers unavailable services, legacy caches, no fake identity, real coordinate selection/editing, no false submission and mobile layouts; final CI runs all eight cases |
 | `npm.cmd run test:integration` | Real browser→API→ORM→worker→LangGraph→checkpoint→UI flow passes; provider/Auth/Storage doubles exist only in tests |
 | `npm.cmd audit --audit-level=moderate` | Zero vulnerabilities after the patched minimatch override |
 | `backend/.venv/Scripts/python.exe scripts/check_public_bundle.py` after build | Passed; checked server variable names, any configured process-secret values and the browser-test signing fixture are absent from SPA assets |
@@ -40,6 +40,12 @@ JSON size limits, startup secret redaction, environment-doc drift and source
 passage authenticity. Existing 91 AI tests cover extraction schemas, SDK failure
 and invalid outputs, prompt-injection boundaries, bounded clarification, genuine
 citations, insufficient media and durable workflow state.
+
+Post-review regressions also cover decimal/negative coordinate typing, rejection
+of oversized batches before Storage downloads, follow-up/report evidence isolation,
+retryable PostgreSQL connection errors and checkpoint-aware worker readiness.
+The disposable PostgreSQL test terminates an actual pooled checkpoint connection
+and verifies that the runtime factory reconnects and reads the same checkpoint.
 
 Verdict: **ready for owner-operated staging setup and smoke verification; not
 approved for production**. The [runbook](deployment-runbook.md) lists the external

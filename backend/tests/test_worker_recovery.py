@@ -11,6 +11,7 @@ from backend.app.worker.runner import Worker
 from backend.tests.test_worker_integration import answer, auth, work
 from backend.tests.workflow_provider import TestProvider
 from civicmesh_ai.checkpoints import sqlite_checkpointer
+from psycopg import InterfaceError, OperationalError
 
 pytestmark = pytest.mark.asyncio
 
@@ -123,3 +124,63 @@ async def test_lost_checkpoint_does_not_silently_restart_a_reviewed_report(
     job = (await client.get(f"/jobs/{created['job_id']}", headers=auth(owner))).json()
     assert job["status"] == "failed" and job["error_code"] == "checkpoint_unavailable"
     assert provider.calls == 1
+
+
+@pytest.mark.parametrize("failure", [OperationalError, InterfaceError])
+async def test_checkpoint_connection_errors_retry_without_starting_paid_work(
+    client, db_session, tmp_path, monkeypatch, failure
+):
+    owner = uuid4()
+    created = (
+        await client.post("/reports", headers=auth(owner), json={"text": "Isolated observation"})
+    ).json()
+    provider = TestProvider()
+    async with sqlite_checkpointer(tmp_path / "connection-recovery.sqlite") as saver:
+        original = saver.aget_tuple
+        first = True
+
+        async def interrupted(config):
+            nonlocal first
+            if first:
+                first = False
+                raise failure("isolated-sensitive-connection-detail")
+            return await original(config)
+
+        monkeypatch.setattr(saver, "aget_tuple", interrupted)
+        assert await work(saver, provider, db_session)
+        db_session.expire_all()
+        job = await db_session.get(Job, UUID(created["job_id"]))
+        assert job.status == "pending" and job.failures == 1 and provider.calls == 0
+        view = await client.get(f"/jobs/{job.id}", headers=auth(owner))
+        assert "isolated-sensitive-connection-detail" not in view.text
+        job.available_at = utc_now() - timedelta(seconds=1)
+        await db_session.commit()
+        assert await work(saver, provider, db_session)
+        db_session.expire_all()
+        job = await db_session.get(Job, UUID(created["job_id"]))
+        assert job.status == "waiting_for_input" and provider.calls == 1
+
+
+async def test_unavailable_checkpoint_store_cannot_refresh_worker_readiness(db_session):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from backend.app.database.models import WorkerHeartbeat
+    from backend.tests.conftest import get_test_settings
+    from sqlalchemy import func, select
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    worker = Worker(
+        sessions=async_sessionmaker(db_session.bind, expire_on_commit=False),
+        engine=db_session.bind,
+        provider=TestProvider(),
+        settings=get_test_settings(),
+        saver=SimpleNamespace(
+            aget_tuple=AsyncMock(side_effect=OperationalError("isolated outage"))
+        ),
+    )
+    with pytest.raises(OperationalError):
+        await worker.heartbeat()
+    assert (
+        await db_session.execute(select(func.count()).select_from(WorkerHeartbeat))
+    ).scalar_one() == 0

@@ -264,7 +264,7 @@ dependencies = [
     { name = "geoalchemy2" },
     { name = "greenlet" },
     { name = "httpx" },
-    { name = "psycopg", extra = ["binary"] },
+    { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyjwt", extra = ["crypto"] },
@@ -292,7 +292,7 @@ requires-dist = [
     { name = "greenlet", specifier = ">=3.1.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "pglast", marker = "extra == 'dev'", specifier = ">=7.0" },
-    { name = "psycopg", extras = ["binary"], specifier = ">=3.2.0" },
+    { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2.0" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pydantic-settings", specifier = ">=2.7.0" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.9.0" },
@@ -1050,6 +1050,9 @@ wheels = [
 [package.optional-dependencies]
 binary = [
     { name = "psycopg-binary", marker = "implementation_name != 'pypy'" },
+]
+pool = [
+    { name = "psycopg-pool" },
 ]
 
 [[package]]

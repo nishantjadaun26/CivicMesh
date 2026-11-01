@@ -23,6 +23,7 @@ from civicmesh_ai.assessment import FollowUpInput
 from civicmesh_ai.coordinator import WorkflowCoordinator
 from civicmesh_ai.errors import AIError
 from civicmesh_ai.schemas import ConfirmedLocation, Extraction, ReportInput
+from psycopg import InterfaceError, OperationalError
 from sqlalchemy import and_, or_, select
 
 logger = logging.getLogger("civicmesh.worker")
@@ -40,6 +41,8 @@ class Worker:
         self.worker_id = str(uuid4())
 
     async def heartbeat(self):
+        # Readiness must not stay fresh when private checkpoint storage is down.
+        await self.saver.aget_tuple({"configurable": {"thread_id": "civicmesh:health"}})
         async with self.sessions() as db:
             row = await db.get(WorkerHeartbeat, self.worker_id)
             if row is None:
@@ -126,7 +129,14 @@ class Worker:
                             else await db.get(FollowUp, job.follow_up_id)
                         )
                         retryable = (isinstance(error, AIError) and error.retryable) or isinstance(
-                            error, (ServiceUnavailableError, TimeoutError, ConnectionError)
+                            error,
+                            (
+                                ServiceUnavailableError,
+                                TimeoutError,
+                                ConnectionError,
+                                OperationalError,
+                                InterfaceError,
+                            ),
                         )
                         job.failures += 1
                         job.error_code = (

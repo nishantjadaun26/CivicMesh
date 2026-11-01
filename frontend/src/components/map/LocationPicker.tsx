@@ -23,7 +23,7 @@ export function LocationPicker({ value, onChange, onIncomplete }: {
     L.tileLayer(import.meta.env.VITE_MAP_TILE_URL, { attribution: import.meta.env.VITE_MAP_ATTRIBUTION })
       .on('tileerror', () => setMessage('Map tiles unavailable. Enter coordinates below or use your location.')).addTo(instance);
     instance.attributionControl.setPrefix(false);
-    instance.on('click', (event: L.LeafletMouseEvent) => change.current({ lat: event.latlng.lat, lng: event.latlng.lng }));
+    instance.on('click', (event: L.LeafletMouseEvent) => { const point = event.latlng.wrap(); change.current({ lat: point.lat, lng: point.lng }); });
     const observer = new ResizeObserver(() => instance.invalidateSize()); observer.observe(host.current);
     return () => { observer.disconnect(); instance.remove(); map.current = null; marker.current = null; };
   }, [configured]);
@@ -34,15 +34,20 @@ export function LocationPicker({ value, onChange, onIncomplete }: {
     if (!marker.current) {
       marker.current = L.marker([value.lat, value.lng], { draggable: true,
         icon: L.divIcon({ className: 'location-pin', html: '<span></span>', iconSize: [32, 40], iconAnchor: [16, 38] }) }).addTo(map.current);
-      marker.current.on('dragend', () => { const point = marker.current!.getLatLng(); change.current({ lat: point.lat, lng: point.lng }); });
+      marker.current.on('dragend', () => { const point = marker.current!.getLatLng().wrap(); change.current({ lat: point.lat, lng: point.lng }); });
     } else marker.current.setLatLng([value.lat, value.lng]);
     map.current.setView([value.lat, value.lng], 16);
   }, [value]);
   function edit(lat: string, lng: string) {
     setLatitude(lat); setLongitude(lng);
-    if (lat.trim() !== '' && lng.trim() !== '' && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)) && Math.abs(Number(lat)) <= 90 && Math.abs(Number(lng)) <= 180) {
-      change.current({ lat: Number(lat), lng: Number(lng) });
-    } else onIncomplete();
+    // Keep the raw draft until blur: publishing numeric values per keystroke
+    // normalizes unfinished decimal/negative input through the parent effect.
+    onIncomplete();
+  }
+  function commit() {
+    if (latitude.trim() !== '' && longitude.trim() !== '' && Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude)) && Math.abs(Number(latitude)) <= 90 && Math.abs(Number(longitude)) <= 180) {
+      change.current({ lat: Number(latitude), lng: Number(longitude) });
+    }
   }
   function gps() {
     if (!navigator.geolocation) { setMessage('GPS is unavailable. Enter both coordinates manually.'); return; }
@@ -58,8 +63,8 @@ export function LocationPicker({ value, onChange, onIncomplete }: {
     <button type="button" className="secondary-button" onClick={gps}>Use my location</button>
     <p className="help" role="status">{message || 'Choose the actual incident location before confirming.'}</p>
     <div className="field-row">
-      <label>Latitude<input type="number" step="any" min="-90" max="90" value={latitude} onChange={event => edit(event.target.value, longitude)} /></label>
-      <label>Longitude<input type="number" step="any" min="-180" max="180" value={longitude} onChange={event => edit(latitude, event.target.value)} /></label>
+      <label>Latitude<input type="number" step="any" min="-90" max="90" value={latitude} onChange={event => edit(event.target.value, longitude)} onBlur={commit} /></label>
+      <label>Longitude<input type="number" step="any" min="-180" max="180" value={longitude} onChange={event => edit(latitude, event.target.value)} onBlur={commit} /></label>
     </div>
   </>;
 }

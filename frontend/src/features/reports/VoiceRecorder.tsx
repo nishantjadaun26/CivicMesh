@@ -93,7 +93,7 @@ export function VoiceRecorder({ value, onChange }: VoiceRecorderProps) {
     // Validate audio type
     const validTypes = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/webm', 'audio/ogg'];
     if (!validTypes.includes(file.type.split(';')[0].trim())) {
-      setError('Please choose a valid audio file (.mp3, .wav, .m4a, .webm, .ogg).');
+      setError('Choose MP3, WAV, MP4, WebM or Ogg audio. Other audio formats are not supported.');
       e.target.value = '';
       return;
     }
@@ -141,7 +141,7 @@ export function VoiceRecorder({ value, onChange }: VoiceRecorderProps) {
             ref={fileInputRef}
             type="file"
             tabIndex={-1}
-            accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg"
+            accept="audio/mpeg,audio/wav,audio/mp4,audio/webm,audio/ogg,.mp3,.wav,.mp4,.webm,.ogg"
             aria-label="Upload audio file"
             onChange={handleFileUpload}
             style={{ display: 'none' }}

@@ -185,7 +185,13 @@ class StorageService:
                 raise ValidationError(f"Evidence item {item.id} is already bound to incident {item.incident_id}.")
             if follow_up_id is not None and (item.report_id is not None or item.follow_up_id is not None):
                 raise ValidationError("Follow-up evidence must be a fresh upload.")
+            if report_id is not None and item.follow_up_id is not None:
+                raise ValidationError("Report evidence cannot already belong to a follow-up.")
 
+        if sum(item.file_size_bytes for item in items) > 12 * 1024 * 1024:
+            raise ValidationError("Combined AI evidence must not exceed 12 MiB.")
+
+        for item in items:
             await StorageService.verify_uploaded_object(item)
 
             if report_id is not None:
@@ -194,9 +200,6 @@ class StorageService:
                 item.incident_id = incident_id
             if follow_up_id is not None:
                 item.follow_up_id = follow_up_id
-
-        if sum(item.file_size_bytes for item in items) > 12 * 1024 * 1024:
-            raise ValidationError("Combined AI evidence must not exceed 12 MiB.")
 
         # Flush to register bindings in session without prematurely committing caller's transaction
         await db.flush()
