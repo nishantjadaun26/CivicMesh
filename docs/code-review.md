@@ -1,7 +1,13 @@
 # CodeRabbit review
 
 `.coderabbit.yaml` is configuration, not proof that the GitHub App is installed.
-Status at setup: **unverified**. Authenticated tooling could list PRs (none existed), but the
+Current status: **verified active**. CodeRabbit has posted reviews and a `CodeRabbit`
+check on implementation PRs [#1](https://github.com/nishantjadaun26/CivicMesh/pull/1),
+[#2](https://github.com/nishantjadaun26/CivicMesh/pull/2) and
+[#3](https://github.com/nishantjadaun26/CivicMesh/pull/3). Check each PR's latest head;
+installation alone does not establish that a particular commit has passed review.
+
+Status at initial setup was unverified. Authenticated tooling could list PRs (none existed), but the
 repository-installations probe returned HTTP 404 and the user installations API returned 403
 (requires a GitHub-App-authorized token). Neither could establish installation status.
 No real PR review was observed, and no artificial PR was created to trigger one.
@@ -47,8 +53,8 @@ Invoke-WebRequest https://coderabbit.ai/integrations/schema.v2.json -OutFile .ca
 python scripts/validate_coderabbit.py
 ```
 
-This is configuration validation only. No frontend/backend implementation or application
-test workflow is included in the trimmed setup.
+This command validates configuration only. Separate AI, backend and frontend workflows
+now check their implementation modules; see `.github/workflows/`.
 
 Sources: [configuration](https://docs.coderabbit.ai/reference/configuration),
 [schema](https://coderabbit.ai/integrations/schema.v2.json),

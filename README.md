@@ -1,8 +1,8 @@
 # CivicMesh
 
-Folder structure and CodeRabbit setup for our three-person hackathon team.
-Application code, dependencies, API contracts, database migrations and deployment
-configuration are left for the team to implement.
+Three-person hackathon project with separate citizen frontend, backend and AI modules.
+The modules have their own checks; connecting them into a working application is the
+next integration milestone. See [merge review and integration handoff](docs/merge-review.md).
 
 ```text
 frontend/src/
@@ -27,8 +27,8 @@ docs/
 .github/workflows/
 ```
 
-Empty folders use `.gitkeep` so Git tracks them. Generate `contracts/openapi.json`
-as a file when the backend contract is implemented; it is not pre-created here.
+The backend exports `contracts/openapi.json`. The frontend must still be adapted to
+that contract. See [frontend setup](frontend/README.md) and [AI setup](backend/app/ai/README.md).
 
 | Teammate | Branch | Module |
 |---|---|---|
@@ -36,9 +36,9 @@ as a file when the backend contract is implemented; it is not pre-created here.
 | 2 | feat/ai-workflow | AI workflow |
 | 3 | feat/backend | Backend and Supabase |
 
-`main` is the integration branch. All branches share the trimmed setup.
+`main` is the integration branch. Keep feature branches for subsequent team work.
 See [team ownership](docs/team-ownership.md) and [Git workflow](docs/git-workflow.md).
 
 CodeRabbit configuration, schema-validation CI and the PR template are included.
-GitHub App activation is **unverified**; no actual PR review has been observed.
+The GitHub App has posted real reviews on this repository's implementation PRs.
 See [activation and review instructions](docs/code-review.md).
