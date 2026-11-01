@@ -247,6 +247,9 @@ ships no authority catalog. First check the domain's authenticity and the passag
 meaning, then save the exact approved passage in a private local UTF-8 file. For
 HTML/text sources, the owner can run:
 
+Use the backend environment's Python executable for this command (for example,
+`backend/.venv/Scripts/python.exe` on Windows or `backend/.venv/bin/python` on Linux).
+
 ```text
 python scripts/ingest_official_source.py --authority "<verified authority name>" --jurisdiction "<exact pilot jurisdiction>" --title "<real document title>" --url "<official HTTPS document URL>" --passage-file "<private passage file>" --verified-official
 ```
